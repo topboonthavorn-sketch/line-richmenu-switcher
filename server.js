@@ -390,4 +390,6 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.l
+server.listen(PORT, () => {
+  console.log(`✅ Rich Menu Switcher admin running on http://localhost:${PORT}`);
+});
