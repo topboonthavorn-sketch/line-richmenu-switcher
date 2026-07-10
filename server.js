@@ -2,12 +2,6 @@
  * LINE Rich Menu Switcher — Admin Backend (zero-dependency, pure Node.js)
  * สำหรับ LINE OA: TOP TEST 3
  *
- *  - Config หน้าเว็บสำหรับใส่ Channel Access Token / Channel Secret
- *  - Upload รูป rich menu แถบ 1 / แถบ 2 (browser ย่อ/ครอปเป็น 2500x1686 + บีบอัด <1MB ให้เอง)
- *  - เลือก template ปุ่ม หรือวาดพื้นที่ปุ่มเอง
- *  - Publish: สร้าง rich menu 2 อัน + upload รูป + สร้าง alias + ตั้ง default
- *  - สลับแท็บด้วย action "richmenuswitch" (ไม่ต้องมี webhook)
- *
  * รันด้วย:  node server.js   (Node 18+ — ไม่ต้อง npm install)
  */
 
@@ -37,6 +31,9 @@ function defaultState() {
       tab1: { name: 'แถบ 1', template: 'tabbar-6', image: null, areas: [] },
       tab2: { name: 'แถบ 2', template: 'tabbar-6', image: null, areas: [] },
     },
+    schedule: { startAt: '', endAt: '' },
+    draftSavedAt: null,
+    lastModifiedAt: null,
     published: null,
   };
 }
@@ -44,6 +41,7 @@ function defaultState() {
 function loadState() {
   try {
     const s = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    if (!s.schedule) s.schedule = { startAt: '', endAt: '' };
     if (process.env.CHANNEL_ACCESS_TOKEN) s.config.channelAccessToken = process.env.CHANNEL_ACCESS_TOKEN;
     if (process.env.CHANNEL_SECRET) s.config.channelSecret = process.env.CHANNEL_SECRET;
     return s;
@@ -76,7 +74,8 @@ async function lineApi(method, url, { token, body, rawBody, contentType } = {}) 
 
 // ---------------------------------------------------------------- publish helpers
 function buildLineAreas(tab) {
-  return tab.areas.map((a) => {
+  // "none" (ไม่กำหนด) = พื้นที่รูปเฉยๆ ไม่ส่งไป LINE
+  return tab.areas.filter((a) => a.action.type !== 'none').map((a) => {
     const x = Math.max(0, Math.round(a.x));
     const y = Math.max(0, Math.round(a.y));
     const bounds = {
@@ -117,13 +116,42 @@ async function publish() {
   const logs = [];
   const log = (m) => logs.push(m);
   const token = state.config.channelAccessToken;
-  if (!token) throw Object.assign(new Error('ยังไม่ได้ตั้งค่า Channel Access Token (ขั้นตอนที่ 1)'), { logs });
+  if (!token) throw Object.assign(new Error('ยังไม่ได้ตั้งค่า Channel Access Token (แท็บ "ตั้งค่าระบบ")'), { logs });
+
+  // ต้องบันทึก Draft ก่อนเผยแพร่ทุกครั้ง
+  if (!state.draftSavedAt || (state.lastModifiedAt && state.draftSavedAt < state.lastModifiedAt))
+    throw Object.assign(new Error('กรุณากด "บันทึก Draft" ก่อนเผยแพร่ (มีการแก้ไขที่ยังไม่ได้บันทึก)'), { logs });
+
+  if (state.schedule && state.schedule.startAt) {
+    const start = new Date(state.schedule.startAt);
+    if (!isNaN(start) && start > new Date())
+      log(`⚠️ หมายเหตุ: campaign ตั้งเวลาเริ่ม ${state.schedule.startAt} — การเผยแพร่ครั้งนี้จะขึ้นทันที`);
+  }
+
   for (const id of ['tab1', 'tab2']) {
     const t = state.tabs[id];
     if (!t.image) throw Object.assign(new Error(`${t.name}: ยังไม่ได้อัปโหลดรูป`), { logs });
     if (!t.areas.length) throw Object.assign(new Error(`${t.name}: ยังไม่ได้กำหนดปุ่ม`), { logs });
     if (!t.areas.some((a) => a.action.type === 'switch'))
       throw Object.assign(new Error(`${t.name}: ต้องมีปุ่ม "สลับแท็บ" อย่างน้อย 1 ปุ่ม`), { logs });
+
+    // ตรวจว่าแต่ละปุ่มกรอกข้อมูลครบก่อนส่งไป LINE
+    t.areas.forEach((a, i) => {
+      const n = i + 1;
+      const v = String((a.action && a.action.value) || '').trim();
+      if (a.action.type === 'none') return; // รูปเฉยๆ ไม่ต้องตรวจ
+      if (a.action.type === 'uri') {
+        const placeholder = v === '' || v === 'https://' || v === 'http://';
+        const valid = /^(https?:\/\/.+|line:\/\/.+|tel:.+|mailto:.+)/i.test(v);
+        if (placeholder || !valid)
+          throw Object.assign(
+            new Error(`${t.name} — ปุ่มที่ ${n}: ยังไม่ได้ใส่ลิงก์ (คลิกปุ่มหมายเลข ${n} บนรูป แล้วใส่ URL เต็ม เช่น https://www.example.com)`),
+            { logs }
+          );
+      }
+      if (a.action.type === 'message' && !v)
+        throw Object.assign(new Error(`${t.name} — ปุ่มที่ ${n}: ยังไม่ได้ใส่ข้อความที่จะส่ง`), { logs });
+    });
   }
 
   const oldPublished = state.published;
@@ -170,6 +198,13 @@ async function publish() {
     saveState();
     return { logs, published: state.published };
   } catch (e) {
+    // เผยแพร่ไม่สำเร็จ → ลบเมนูที่สร้างค้างไว้ ไม่ให้เหลือขยะบน channel
+    for (const id of Object.values(newIds)) {
+      try {
+        await lineApi('DELETE', `https://api.line.me/v2/bot/richmenu/${id}`, { token });
+        log(`ลบเมนูที่สร้างค้างไว้ (${id}) แล้ว`);
+      } catch { /* ignore */ }
+    }
     e.logs = logs;
     throw e;
   }
@@ -211,7 +246,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 const server = http.createServer(async (req, res) => {
   try {
-    // optional basic auth
     if (ADMIN_PASSWORD) {
       const [scheme, encoded] = (req.headers.authorization || '').split(' ');
       const pass = scheme === 'Basic' && encoded ? Buffer.from(encoded, 'base64').toString().split(':').slice(1).join(':') : '';
@@ -225,10 +259,12 @@ const server = http.createServer(async (req, res) => {
     const p = url.pathname;
 
     // ---------- static ----------
-    if (req.method === 'GET' && (p === '/' || p === '/index.html'))
-      return serveFile(res, path.join(__dirname, 'public', 'index.html'));
+    if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
+      const rootIndex = path.join(__dirname, 'index.html');
+      return serveFile(res, fs.existsSync(rootIndex) ? rootIndex : path.join(__dirname, 'public', 'index.html'));
+    }
     if (req.method === 'GET' && p.startsWith('/uploads/')) {
-      const name = path.basename(p); // prevent traversal
+      const name = path.basename(p);
       return serveFile(res, path.join(UPLOAD_DIR, name));
     }
 
@@ -272,11 +308,26 @@ const server = http.createServer(async (req, res) => {
       if (body.name !== undefined) tab.name = String(body.name).slice(0, 50);
       if (body.template !== undefined) tab.template = body.template;
       if (Array.isArray(body.areas)) tab.areas = body.areas;
+      state.lastModifiedAt = new Date().toISOString();
       saveState();
       return sendJson(res, 200, { ok: true });
     }
 
-    // upload image: JSON { dataUrl: "data:image/jpeg;base64,..." } (browser already resized to 2500x1686, <1MB)
+    // save draft (บังคับก่อนเผยแพร่) + schedule
+    if (p === '/api/draft' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req)).toString() || '{}');
+      if (body.schedule) {
+        state.schedule = {
+          startAt: String(body.schedule.startAt || ''),
+          endAt: String(body.schedule.endAt || ''),
+        };
+      }
+      state.draftSavedAt = new Date().toISOString();
+      saveState();
+      return sendJson(res, 200, { ok: true, draftSavedAt: state.draftSavedAt });
+    }
+
+    // upload image: JSON { dataUrl } (browser ย่อ/ครอปเป็น 2500x1686 <1MB แล้ว)
     m = p.match(/^\/api\/tabs\/(tab1|tab2)\/image$/);
     if (m && req.method === 'POST') {
       const body = JSON.parse((await readBody(req)).toString() || '{}');
@@ -287,6 +338,7 @@ const server = http.createServer(async (req, res) => {
       const filename = `${m[1]}.jpg`;
       fs.writeFileSync(path.join(UPLOAD_DIR, filename), buf);
       state.tabs[m[1]].image = filename;
+      state.lastModifiedAt = new Date().toISOString();
       saveState();
       return sendJson(res, 200, { ok: true, url: `/uploads/${filename}?t=${Date.now()}`, sizeKB: Math.round(buf.length / 1024) });
     }
@@ -338,6 +390,4 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`✅ Rich Menu Switcher admin running on http://localhost:${PORT}`);
-});
+server.l
