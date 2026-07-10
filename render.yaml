@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: line-richmenu-switcher
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: CHANNEL_SECRET
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

@@ -1,0 +1,12 @@
+{
+  "name": "line-richmenu-switcher",
+  "version": "1.0.0",
+  "description": "Admin backend for LINE Rich Menu tab switcher (TOP TEST 3) — zero dependencies",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
