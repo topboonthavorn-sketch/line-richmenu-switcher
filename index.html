@@ -115,6 +115,7 @@
         <span id="connResult"></span>
       </div>
       <p class="hint">หา token ได้ที่ <b>developers.line.biz</b> → Provider → Channel "TOP TEST 3" → แท็บ Messaging API → Channel access token (กด Issue)</p>
+      <p class="hint">💡 Free tier: server จะถูกรีเซ็ตเมื่อไม่มีคนใช้ — งานออกแบบระบบจะกู้คืนจากเบราว์เซอร์ให้อัตโนมัติ แต่ <b>token แนะนำตั้งเป็น Environment Variable ชื่อ CHANNEL_ACCESS_TOKEN ใน Render Dashboard</b> จะได้ไม่ต้องใส่ใหม่ทุกครั้ง</p>
     </div>
     <div class="card">
       <h2>เครื่องมือ Channel</h2>
@@ -237,8 +238,47 @@ let state = null;
 let currentTab = 'tab1';
 let selectedArea = -1;
 let images = { tab1: null, tab2: null };
+let imageDataUrls = { tab1: null, tab2: null };
 let drag = null; // {mode:'create'|'move'|'resize', ...}
 let dirty = false;
+
+// ---------------- local backup (กัน free-tier server ล้างข้อมูลตอน restart) ----------------
+function backupLocal() {
+  try {
+    localStorage.setItem('rm_backup', JSON.stringify({
+      tabs: state.tabs,
+      schedule: {
+        startAt: document.getElementById('schStart').value,
+        endAt: document.getElementById('schEnd').value,
+      },
+      images: imageDataUrls,
+      savedAt: new Date().toISOString(),
+    }));
+  } catch {}
+}
+
+async function restoreBackup(b) {
+  for (const id of ['tab1', 'tab2']) {
+    const t = b.tabs && b.tabs[id];
+    if (!t) continue;
+    await fetch(`/api/tabs/${id}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: t.name, template: t.template, areas: t.areas }),
+    });
+    if (b.images && b.images[id]) {
+      await fetch(`/api/tabs/${id}/image`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl: b.images[id] }),
+      });
+    }
+  }
+  if (b.schedule) {
+    await fetch('/api/draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schedule: b.schedule }),
+    });
+  }
+}
 
 // ---------------- templates ----------------
 function tabBarAreas() {
@@ -582,6 +622,7 @@ function saveTab() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: t.name, template: t.template, areas: t.areas }),
     });
+    backupLocal();
   }, 400);
 }
 function renderAll() { renderTplGrid(); renderAreaPanel(); drawCanvas(); }
@@ -620,8 +661,10 @@ async function uploadImage(file) {
     });
     const data = await res.json();
     if (!res.ok) return toast('❌ ' + (data.error || 'อัปโหลดไม่สำเร็จ'));
+    imageDataUrls[currentTab] = dataUrl;
     await loadImage(currentTab, data.url);
     markDirty();
+    backupLocal();
     toast(`✅ อัปโหลดสำเร็จ (${data.sizeKB} KB)`);
     drawCanvas();
   } catch (e) { toast('❌ ' + e.message); }
@@ -633,7 +676,22 @@ zone.addEventListener('drop', (e) => { e.preventDefault(); zone.style.borderColo
 function loadImage(tabId, url) {
   return new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => { images[tabId] = img; resolve(); };
+    img.onload = () => {
+      images[tabId] = img;
+      // เก็บ dataUrl ไว้ backup (กรณีรูปมาจาก server)
+      if (!imageDataUrls[tabId]) {
+        try {
+          const c = document.createElement('canvas');
+          c.width = MENU_W; c.height = MENU_H;
+          c.getContext('2d').drawImage(img, 0, 0, MENU_W, MENU_H);
+          let q = 0.85, d;
+          do { d = c.toDataURL('image/jpeg', q); q -= 0.1; }
+          while (d.length * 0.75 > 1000 * 1024 && q >= 0.3);
+          imageDataUrls[tabId] = d;
+        } catch {}
+      }
+      resolve();
+    };
     img.onerror = () => resolve();
     img.src = url;
   });
@@ -687,7 +745,7 @@ async function saveDraft() {
     body: JSON.stringify({ schedule: { startAt: document.getElementById('schStart').value, endAt: document.getElementById('schEnd').value } }),
   });
   const data = await res.json();
-  if (data.ok) { state.draftSavedAt = data.draftSavedAt; dirty = false; updateDraftBadge(); toast('💾 บันทึก Draft แล้ว'); }
+  if (data.ok) { state.draftSavedAt = data.draftSavedAt; dirty = false; updateDraftBadge(); backupLocal(); toast('💾 บันทึก Draft แล้ว'); }
 }
 function showLogs(logs, boxId = 'logBox') {
   const box = document.getElementById(boxId);
@@ -748,6 +806,22 @@ async function refreshState(loadImgs = true) {
   dirty = !!(state.lastModifiedAt && (!state.draftSavedAt || state.draftSavedAt < state.lastModifiedAt));
   updateDraftBadge();
   if (loadImgs) {
+    // server ถูกล้าง (free tier restart) → กู้คืนจาก backup ในเบราว์เซอร์
+    const empty = !state.tabs.tab1.image && !state.tabs.tab2.image
+      && !state.tabs.tab1.areas.length && !state.tabs.tab2.areas.length;
+    let backup = null;
+    try { backup = JSON.parse(localStorage.getItem('rm_backup') || 'null'); } catch {}
+    if (empty && backup && backup.tabs) {
+      toast('♻️ Server ถูกรีเซ็ต — กำลังกู้คืนงานล่าสุดจากเบราว์เซอร์...');
+      await restoreBackup(backup);
+      const res2 = await fetch('/api/state');
+      state = await res2.json();
+      if (state.schedule) {
+        document.getElementById('schStart').value = state.schedule.startAt || '';
+        document.getElementById('schEnd').value = state.schedule.endAt || '';
+      }
+      toast('♻️ กู้คืนงานล่าสุดแล้ว — ถ้ายังไม่ได้ตั้ง token เป็น env ต้องใส่ token ใหม่');
+    }
     for (const id of ['tab1', 'tab2']) {
       if (state.tabs[id].image) await loadImage(id, `/uploads/${state.tabs[id].image}?t=${Date.now()}`);
     }
