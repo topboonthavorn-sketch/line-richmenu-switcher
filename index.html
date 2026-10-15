@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LINE Rich Menu — บุญถาวร</title>
+<title>LINE Richmenu Setting</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/logo.png">
 <style>
   :root{
     --red:#c8102e; --red-dk:#a00c24; --maroon:#7a1623; --ink:#1f2328; --muted:#6b7280;
@@ -17,9 +19,8 @@
   a{color:inherit}
   /* top bar */
   .topbar{background:#fff;border-bottom:1px solid var(--line);height:56px;display:flex;align-items:center;gap:22px;padding:0 24px;position:sticky;top:0;z-index:30}
-  .brand{font-weight:800;color:var(--red);font-size:20px;letter-spacing:.3px}
-  .topnav{display:flex;gap:20px;color:#444;font-size:14px}
-  .topnav b{color:var(--red)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;color:var(--ink);cursor:pointer}
+  .brand img{width:34px;height:34px;border-radius:8px}
   .container{max-width:1280px;margin:0 auto;padding:22px 24px 80px}
   .crumb{color:var(--muted);font-size:13px;margin-bottom:4px}
   .crumb b{color:var(--ink)}
@@ -115,8 +116,7 @@
 </head>
 <body>
 <div class="topbar">
-  <span class="brand">บุญถาวร</span>
-  <div class="topnav"><span>Dashboard</span><span>Customer</span><span>Transactions</span><span>Products</span><b>Marketing</b><span>Setting</span></div>
+  <span class="brand" onclick="goList()"><img src="/logo.png" alt="logo">LINE Richmenu Setting</span>
   <div class="spacer"></div>
   <span id="botBadge" class="pill gray">ยังไม่เชื่อมต่อ</span>
 </div>
@@ -127,7 +127,6 @@
   <div id="view-list">
     <div class="row">
       <div>
-        <div class="crumb">Home / Marketing / <b>Rich Menu</b></div>
         <div class="h1">LINE Rich Menu</div>
         <div class="sub">เมนูด้านล่างหน้าแชท LINE</div>
       </div>
@@ -242,9 +241,8 @@
     <div style="flex:1"><label>ชื่อชุดเมนู</label><input id="cName" value="ชุดเมนูใหม่"></div>
     <div><label>ชุดนี้มีกี่แท็บ</label>
       <div class="seg">
-        <button id="tc1" disabled title="เร็วๆนี้">1 แท็บ</button>
+        <button id="tc1" onclick="setTabCount(1)">1 แท็บ</button>
         <button id="tc2" class="on" onclick="setTabCount(2)">2 แท็บ</button>
-        <button id="tc3" disabled title="เร็วๆนี้">3 แท็บ</button>
       </div>
     </div>
   </div>
@@ -336,12 +334,13 @@ function renderList(){
   const total=sets.length;
   const live=sets.filter(s=>s.status==='live').length;
   const def=sets.find(s=>s.id===S.defaultSetId);
-  const withImg=sets.filter(s=>s.tabs.tab1.hasImage&&s.tabs.tab2.hasImage).length;
+  const tc=s=>s.tabCount===1?['tab1']:['tab1','tab2'];
+  const withImg=sets.filter(s=>tc(s).every(t=>s.tabs[t].hasImage)).length;
   const scheduled=sets.filter(s=>s.status==='scheduled').length;
   document.getElementById('kpis').innerHTML=`
     <div class="kpi"><div class="l">ชุดเมนูทั้งหมด</div><div class="v">${total}</div><div class="s">${live} Active</div></div>
     <div class="kpi"><div class="l">ชุดที่เป็นเมนูเริ่มต้น</div><div class="v" style="font-size:19px;padding-top:4px">${def?def.name:'— ไม่มี —'}</div><div class="s">ผู้ใช้ทุกคนเห็นชุดนี้</div></div>
-    <div class="kpi"><div class="l">อัปโหลดรูปแล้ว</div><div class="v">${withImg}<span style="font-size:15px;color:var(--muted)">/${total}</span></div><div class="s">ชุดที่รูปครบ 2 แท็บ</div></div>
+    <div class="kpi"><div class="l">อัปโหลดรูปแล้ว</div><div class="v">${withImg}<span style="font-size:15px;color:var(--muted)">/${total}</span></div><div class="s">ชุดที่รูปครบทุกแท็บ</div></div>
     <div class="kpi"><div class="l">ตั้งเวลาไว้</div><div class="v">${scheduled}</div><div class="s">ชุดที่รอขึ้นตามเวลา</div></div>`;
   const tb=document.getElementById('setRows');tb.innerHTML='';
   document.getElementById('emptyList').classList.toggle('hide',total>0);
@@ -352,9 +351,9 @@ function renderList(){
     const tr=document.createElement('tr');
     tr.onclick=()=>openDetail(s.id);
     tr.innerHTML=`
-      <td><div class="thumbs">${th('tab1')}${th('tab2')}</div></td>
+      <td><div class="thumbs">${tc(s).map(th).join('')}</div></td>
       <td><div class="setname">${esc(s.name)}</div><div class="setslug">${esc(s.slug)}</div></td>
-      <td>2</td>
+      <td>${s.tabCount===1?1:2}</td>
       <td>2500x1686</td>
       <td><span class="pill ${r.cls}">${r.label}</span>${s.schedule&&s.schedule.startAt?`<div class="hint" style="margin-top:4px">${fmtDT(s.schedule.startAt)} → ${fmtDT(s.schedule.endAt)||'—'}</div>`:''}</td>
       <td>${s.status==='live'?'<span class="pill ok dot">Active</span>':s.status==='scheduled'?'<span class="pill gray dot">รอขึ้น</span>':s.status==='ended'?'<span class="pill warn dot">จบแล้ว</span>':'<span class="pill gray dot">ร่าง</span>'}</td>
@@ -372,18 +371,21 @@ async function delSet(id,name){if(!confirm('ลบชุด "'+name+'" ?'))retur
 // ---------------- create ----------------
 function openCreate(){createTabCount=2;createLayout=null;document.getElementById('cName').value='ชุดเมนูใหม่';setTabCount(2);document.getElementById('mCreate').classList.add('on');}
 function closeM(id){document.getElementById(id).classList.remove('on');}
+function tplKeysFor(n){return Object.keys(TPL).filter(k=>k!=='custom'&&(n===1?TPL[k].one:TPL[k].two)).concat('custom');}
 function setTabCount(n){
   createTabCount=n;
-  ['tc1','tc2','tc3'].forEach((x,i)=>document.getElementById(x).classList.toggle('on',i+1===n));
-  const note=document.getElementById('cNote');
-  const keys=Object.keys(TPL).filter(k=>k!=='custom'&&(n===1?TPL[k].one:TPL[k].two));
-  note.textContent=n===1?'เมนูเดียว ไม่มีแถบสลับ — เต็มพื้นที่ภาพ 2500×1686':'LINE ไม่มีแถบสลับแท็บให้ — แถบต้องอยู่ในรูปที่เราออกแบบเอง เลย์เอาต์กันพื้นที่แถบด้านบนไว้ให้แล้ว (16% ของภาพ)';
-  const g=document.getElementById('cLay');g.innerHTML='';createLayout=keys[0];
-  keys.concat('custom').forEach(k=>{const d=document.createElement('div');d.className='lay'+(k===createLayout?' on':'');d.innerHTML=tplThumb(k)+`<div class="n">${TPL[k].n}</div>`;d.onclick=()=>{createLayout=k;setTabCount(n);};g.appendChild(d);});
+  ['tc1','tc2'].forEach((x,i)=>document.getElementById(x).classList.toggle('on',i+1===n));
+  document.getElementById('cNote').textContent=n===1?'เมนูเดียว ไม่มีแถบสลับ — เต็มพื้นที่ภาพ 2500×1686':'LINE ไม่มีแถบสลับแท็บให้ — แถบต้องอยู่ในรูปที่เราออกแบบเอง เลย์เอาต์กันพื้นที่แถบด้านบนไว้ให้แล้ว (16% ของภาพ)';
+  createLayout=tplKeysFor(n)[0];
+  renderCreateLayouts();
+}
+function renderCreateLayouts(){
+  const g=document.getElementById('cLay');g.innerHTML='';
+  tplKeysFor(createTabCount).forEach(k=>{const d=document.createElement('div');d.className='lay'+(k===createLayout?' on':'');d.innerHTML=tplThumb(k)+`<div class="n">${TPL[k].n}</div>`;d.onclick=()=>{createLayout=k;renderCreateLayouts();};g.appendChild(d);});
 }
 async function doCreate(){
   const name=document.getElementById('cName').value.trim()||'ชุดเมนูใหม่';
-  const r=await api('/api/sets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,layout:createLayout})});
+  const r=await api('/api/sets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,layout:createLayout,tabCount:createTabCount})});
   closeM('mCreate');await refresh();openDetail(r.id);
 }
 
@@ -399,8 +401,11 @@ async function openDetail(id){
   document.getElementById('fChatbar').value=s.chatBarText||'เมนู';
   document.getElementById('fStart').value=toLocalInput(s.schedule?.startAt);
   document.getElementById('fEnd').value=toLocalInput(s.schedule?.endAt);
+  const one=s.tabCount===1;
+  document.getElementById('nt2').classList.toggle('hide',one);
+  document.getElementById('nt1').textContent=one?'เมนู (1 แท็บ)':'1 · แถบ 1';
   // ชุดที่เพิ่งสร้าง: สร้างปุ่มตาม layout ที่เลือกไว้ให้อัตโนมัติ
-  for(const t of['tab1','tab2']){
+  for(const t of(one?['tab1']:['tab1','tab2'])){
     const tb=s.tabs[t];
     if((!tb.areas||!tb.areas.length)&&tb.template!=='custom'&&TPL[tb.template]){
       tb.areas=TPL[tb.template].make();
@@ -430,7 +435,7 @@ function updateStatusUI(){
 
 function renderLayGrid(){
   const g=document.getElementById('layGrid');g.innerHTML='';
-  Object.keys(TPL).forEach(k=>{const d=document.createElement('div');d.className='lay'+(curTab().template===k?' on':'');d.innerHTML=tplThumb(k)+`<div class="n">${TPL[k].n}</div>`;d.onclick=()=>applyTpl(k);g.appendChild(d);});
+  tplKeysFor(curSet().tabCount===1?1:2).forEach(k=>{const d=document.createElement('div');d.className='lay'+(curTab().template===k?' on':'');d.innerHTML=tplThumb(k)+`<div class="n">${TPL[k].n}</div>`;d.onclick=()=>applyTpl(k);g.appendChild(d);});
   document.getElementById('cvHint').textContent=isCustom()?'ลากพื้นที่ว่าง=สร้างปุ่ม · ลากตัวปุ่ม=ย้าย · ลากมุม=ย่อ/ขยาย · คลิกปุ่ม=แก้ action':'คลิกปุ่มเพื่อแก้ action · ตำแหน่งล็อกตาม template (เลือก “วาดเอง” เพื่อขยับเอง)';
 }
 function applyTpl(k){const t=curTab();if(k!=='custom')t.areas=TPL[k].make();t.template=k;sel=-1;saveTab();renderAll();}
@@ -487,6 +492,7 @@ function renderSide(){
   ['aX','aY','aW','aH'].forEach(id=>document.getElementById(id).disabled=!cu);
   document.getElementById('lockNote').textContent=cu?'':'— ล็อกตาม template';
   document.getElementById('delBtn').style.display=cu?'inline-flex':'none';
+  aType.querySelector('option[value="switch"]').disabled=curSet().tabCount===1;
   aType.value=a.action.type;syncVal(a);
 }
 function syncVal(a){const t=a.action.type;document.getElementById('aSwitch').classList.toggle('hide',t!=='switch');const v=document.getElementById('aVal');v.classList.toggle('hide',!(t==='uri'||t==='message'));const lb=document.getElementById('valLabel');lb.classList.toggle('hide',t==='none');lb.textContent=t==='switch'?'สลับไปที่':t==='uri'?'ลิงก์ URL (ขึ้นต้น https://)':'ข้อความที่จะส่ง';if(t==='switch')document.getElementById('aSwitch').value=a.action.value==='tab2'?'tab2':'tab1';else if(t!=='none'){v.value=a.action.value||'';v.placeholder=t==='uri'?'https://www.example.com':'เช่น สวัสดีครับ';}}

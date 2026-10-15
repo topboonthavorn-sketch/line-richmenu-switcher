@@ -43,13 +43,15 @@ function defaultState() {
 function newTab(name) {
   return { name, template: 'tabbar-6', areas: [], image: null };
 }
-function newSet(name, layout) {
+function tabIds(s) { return (s.tabCount === 1) ? ['tab1'] : ['tab1', 'tab2']; }
+function newSet(name, layout, tabCount) {
   const id = crypto.randomUUID();
   const slug = (name || 'menu').toLowerCase().replace(/[^a-z0-9ก-๙]+/gi, '-').replace(/^-|-$/g, '').slice(0, 24) || 'menu';
-  const t1 = newTab('แถบ 1'); const t2 = newTab('แถบ 2');
+  const t1 = newTab(tabCount === 1 ? 'เมนู' : 'แถบ 1'); const t2 = newTab('แถบ 2');
   if (layout) { t1.template = layout; t2.template = layout; }
   return {
     id, name: name || 'ชุดเมนูใหม่', slug,
+    tabCount: tabCount === 1 ? 1 : 2,
     chatBarText: 'เมนู',
     schedule: { startAt: '', endAt: '' },
     tabs: { tab1: t1, tab2: t2 },
@@ -174,11 +176,11 @@ async function ensureAlias(token, aliasId, richMenuId, log) {
 }
 
 function validateSet(s) {
-  for (const id of ['tab1', 'tab2']) {
+  for (const id of tabIds(s)) {
     const t = s.tabs[id];
     if (!t.image) throw new Error(`${t.name}: ยังไม่ได้อัปโหลดรูป`);
     if (!t.areas || !t.areas.length) throw new Error(`${t.name}: ยังไม่ได้กำหนดปุ่ม`);
-    if (!t.areas.some((a) => a.action.type === 'switch'))
+    if (s.tabCount !== 1 && !t.areas.some((a) => a.action.type === 'switch'))
       throw new Error(`${t.name}: ต้องมีปุ่ม "สลับแท็บ" อย่างน้อย 1 ปุ่ม`);
     t.areas.forEach((a, i) => {
       const n = i + 1; const v = String((a.action && a.action.value) || '').trim();
@@ -209,13 +211,14 @@ async function publishSet(setId, { auto = false } = {}) {
   const oldPublished = s.published;
   const newIds = {};
   try {
-    for (const id of ['tab1', 'tab2']) {
+    for (const id of tabIds(s)) {
       const t = s.tabs[id];
       const menu = {
         size: { width: MENU_W, height: MENU_H }, selected: true,
         name: `${s.slug}-${id}-${Date.now()}`.slice(0, 300),
         chatBarText: s.chatBarText || state.config.chatBarText || 'เมนู',
-        areas: buildLineAreas(t),
+        // เมนู 1 แท็บ: ไม่มี alias ให้สลับ จึงตัดปุ่มสลับแท็บออก
+        areas: buildLineAreas(s.tabCount === 1 ? { areas: t.areas.filter((a) => a.action.type !== 'switch') } : t),
       };
       const { richMenuId } = await lineApi('POST', 'https://api.line.me/v2/bot/richmenu', { token, body: menu });
       log(`สร้าง rich menu "${t.name}" (${richMenuId})`);
@@ -225,8 +228,10 @@ async function publishSet(setId, { auto = false } = {}) {
       log(`อัปโหลดรูป "${t.name}" (${Math.round(imgBuf.length / 1024)} KB)`);
       newIds[id] = richMenuId;
     }
-    await ensureAlias(token, ALIASES.tab1, newIds.tab1, log);
-    await ensureAlias(token, ALIASES.tab2, newIds.tab2, log);
+    if (s.tabCount !== 1) {
+      await ensureAlias(token, ALIASES.tab1, newIds.tab1, log);
+      await ensureAlias(token, ALIASES.tab2, newIds.tab2, log);
+    }
     await lineApi('POST', `https://api.line.me/v2/bot/user/all/richmenu/${newIds.tab1}`, { token });
     log('ตั้งเป็นเมนูเริ่มต้นของผู้ใช้ทุกคนแล้ว');
 
@@ -363,6 +368,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200); return res.end('OK');
     }
     if (p === '/health' || p === '/cron') { tick().catch(() => {}); res.writeHead(200); return res.end('ok'); }
+    if (req.method === 'GET' && (p === '/logo.png' || p === '/favicon.png' || p === '/favicon.ico')) {
+      const f = path.join(__dirname, p === '/logo.png' ? 'logo.png' : 'favicon.png');
+      return fs.readFile(f, (err, buf) => {
+        if (err) { res.writeHead(404); return res.end(); }
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }); res.end(buf);
+      });
+    }
 
     // basic auth (admin)
     if (ADMIN_PASSWORD) {
@@ -410,7 +422,7 @@ const server = http.createServer(async (req, res) => {
     // create set
     if (p === '/api/sets' && req.method === 'POST') {
       const b = JSON.parse((await readBody(req)).toString() || '{}');
-      const s = newSet(b.name, b.layout);
+      const s = newSet(b.name, b.layout, Number(b.tabCount) === 1 ? 1 : 2);
       state.sets[s.id] = s; await saveState();
       return sendJson(res, 200, { ok: true, id: s.id });
     }
