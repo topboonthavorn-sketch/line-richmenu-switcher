@@ -112,19 +112,62 @@
   .detail-head{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px}
   @media(max-width:980px){.detail-head{grid-template-columns:repeat(2,1fr)}}
   .hide{display:none!important}
+  /* auth */
+  .auth-wrap{max-width:440px;margin:40px auto;background:#fff;border:1px solid var(--line);border-radius:16px;padding:28px}
+  .auth-logo{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:18px}
+  .auth-logo img{width:72px;height:72px;border-radius:16px}
+  .auth-logo b{font-size:20px}
+  .auth-tabs{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:18px}
+  .auth-tabs button{flex:1;border:none;border-radius:0;justify-content:center;font-weight:700;color:#666;background:#fff}
+  .auth-tabs button.on{background:var(--ink);color:#fff}
+  .err{color:var(--red);font-size:13px;min-height:18px;margin:4px 0 8px}
+  .wsbox{display:flex;align-items:center;gap:8px}
+  .copyrow{display:flex;gap:6px}
+  .copyrow input{font-family:monospace;font-size:12.5px;background:#f7f8f9}
 </style>
 </head>
 <body>
 <div class="topbar">
   <span class="brand" onclick="goList()"><img src="/logo.png" alt="logo">LINE Richmenu Setting</span>
   <div class="spacer"></div>
-  <span id="botBadge" class="pill gray">ยังไม่เชื่อมต่อ</span>
+  <div class="wsbox hide" id="wsBox">
+    <span id="wsName" class="pill gray"></span>
+    <span id="botBadge" class="pill gray">ยังไม่เชื่อมต่อ</span>
+    <button class="btn btn-sm" onclick="logout()">ออกจากระบบ</button>
+  </div>
 </div>
 
 <div class="container">
 
+  <!-- ================= AUTH VIEW ================= -->
+  <div id="view-auth" class="hide">
+    <div class="auth-wrap">
+      <div class="auth-logo"><img src="/logo.png" alt="logo"><b>LINE Richmenu Setting</b><span class="sub">จัดการ Rich Menu ของ LINE OA ทีมคุณ</span></div>
+      <div class="auth-tabs">
+        <button id="atLogin" class="on" onclick="authMode('login')">เข้าสู่ระบบ</button>
+        <button id="atReg" onclick="authMode('register')">สร้าง workspace ใหม่</button>
+      </div>
+      <div id="fLogin">
+        <div class="field"><label>Workspace ID</label><input id="lgSlug" placeholder="เช่น btv-main" autocomplete="username"></div>
+        <div class="field"><label>รหัสผ่าน</label><input id="lgPw" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div class="err" id="lgErr"></div>
+        <button class="btn-red btn" style="width:100%;justify-content:center" onclick="doLogin()">เข้าสู่ระบบ</button>
+      </div>
+      <div id="fReg" class="hide">
+        <div class="field"><label>ชื่อทีม / แบรนด์</label><input id="rgName" placeholder="เช่น บุญถาวร Marketing"></div>
+        <div class="field"><label>Workspace ID (ใช้ตอน login — a-z, 0-9, -)</label><input id="rgSlug" placeholder="เช่น btv-main"></div>
+        <div class="field"><label>รหัสผ่าน (อย่างน้อย 6 ตัว)</label><input id="rgPw" type="password" autocomplete="new-password"></div>
+        <div class="field"><label>ยืนยันรหัสผ่าน</label><input id="rgPw2" type="password" autocomplete="new-password"></div>
+        <div class="field" id="rgCodeWrap"><label>รหัสสร้าง workspace (ขอจากผู้ดูแลระบบ)</label><input id="rgCode" type="password"></div>
+        <div class="err" id="rgErr"></div>
+        <button class="btn-red btn" style="width:100%;justify-content:center" onclick="doRegister()">สร้าง workspace</button>
+        <div class="hint">หลังสร้างเสร็จ ให้ไปที่ “ตั้งค่าระบบ” แล้ววาง Channel Access Token ของ LINE OA ทีมคุณ</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= LIST VIEW ================= -->
-  <div id="view-list">
+  <div id="view-list" class="hide">
     <div class="row">
       <div>
         <div class="h1">LINE Rich Menu</div>
@@ -257,12 +300,19 @@
 
 <!-- ======= config modal ======= -->
 <div class="mask" id="mConfig"><div class="modal" style="max-width:600px">
-  <h3>ตั้งค่าระบบ (เชื่อม LINE) <span class="x" onclick="closeM('mConfig')">×</span></h3>
-  <div class="field"><label>Channel Access Token <span id="tokHint" class="pill gray" style="font-size:11px"></span></label><input id="cfgTok" type="password" placeholder="วาง token จาก LINE Developers"></div>
-  <div class="field"><label>Channel Secret (สำหรับ tracking/webhook)</label><input id="cfgSec" type="password" placeholder="channel secret"></div>
+  <h3>ตั้งค่าระบบ (เชื่อม LINE OA ของทีม) <span class="x" onclick="closeM('mConfig')">×</span></h3>
+  <div class="field"><label>ชื่อทีม / แบรนด์</label><input id="cfgName"></div>
+  <div class="field"><label>Channel Access Token (long-lived) <span id="tokHint" class="pill gray" style="font-size:11px"></span></label><input id="cfgTok" type="password" placeholder="วางเพื่อเปลี่ยน — เว้นว่าง = ใช้ค่าเดิม"></div>
+  <div class="field"><label>Channel Secret (สำหรับเก็บสถิติการกดปุ่ม) <span id="secHint" class="pill gray" style="font-size:11px"></span></label><input id="cfgSec" type="password" placeholder="วางเพื่อเปลี่ยน — เว้นว่าง = ใช้ค่าเดิม"></div>
   <div class="field"><label>ข้อความแถบล่าง (default)</label><input id="cfgBar" maxlength="14" placeholder="เมนู"></div>
   <div class="row"><button class="btn-red btn" onclick="saveConfig()">บันทึก</button><button class="btn" onclick="testConn()">ทดสอบการเชื่อมต่อ</button><span id="connRes"></span></div>
+  <div class="hint">หา token / secret ได้ที่ developers.line.biz → Provider → Channel ของ OA → แท็บ Basic settings (Channel secret) และ Messaging API (Channel access token → Issue)</div>
+  <div class="field" style="margin-top:14px"><label>Webhook URL (วางใน LINE Developers → Messaging API → Webhook URL แล้วเปิด Use webhook — ใช้เก็บสถิติการกด)</label>
+    <div class="copyrow"><input id="cfgHook" readonly><button class="btn btn-sm" onclick="copyHook()">คัดลอก</button></div></div>
   <div class="hint" id="storeHint" style="margin-top:12px"></div>
+  <details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px;color:var(--muted)">เปลี่ยนรหัสผ่าน workspace</summary>
+    <div class="row" style="margin-top:8px"><input id="pwCur" type="password" placeholder="รหัสปัจจุบัน" style="flex:1"><input id="pwNew" type="password" placeholder="รหัสใหม่ (≥6 ตัว)" style="flex:1"><button class="btn btn-sm" onclick="changePw()">เปลี่ยน</button></div>
+  </details>
   <div class="row" style="margin-top:10px"><button class="btn-danger btn btn-sm" onclick="resetAll()">ลบ Rich Menu ทั้งหมดบน channel</button></div>
   <div class="logbox" id="cfgLog"></div>
 </div></div>
@@ -308,13 +358,52 @@ function toLocalInput(iso){if(!iso)return'';const d=new Date(iso);if(isNaN(d))re
 function schedFromInputs(){return{startAt:toIso(document.getElementById('fStart').value),endAt:toIso(document.getElementById('fEnd').value)};}
 
 // ---------------- api ----------------
-async function api(path,opt){const r=await fetch(path,opt);return r.json();}
+async function api(path,opt){
+  const r=await fetch(path,opt);
+  if(r.status===401&&!path.startsWith('/api/auth/')){showAuth();throw new Error('กรุณาเข้าสู่ระบบ');}
+  return r.json();
+}
+
+// ---------------- auth ----------------
+let META={signupCodeRequired:true};
+function showAuth(){view='auth';['view-list','view-detail'].forEach(i=>document.getElementById(i).classList.add('hide'));document.getElementById('view-auth').classList.remove('hide');document.getElementById('wsBox').classList.add('hide');document.querySelectorAll('.mask.on').forEach(m=>m.classList.remove('on'));}
+function authMode(m){document.getElementById('atLogin').classList.toggle('on',m==='login');document.getElementById('atReg').classList.toggle('on',m==='register');document.getElementById('fLogin').classList.toggle('hide',m!=='login');document.getElementById('fReg').classList.toggle('hide',m!=='register');}
+async function doLogin(){
+  const e=document.getElementById('lgErr');e.textContent='';
+  const r=await api('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:document.getElementById('lgSlug').value.trim(),password:document.getElementById('lgPw').value})});
+  if(!r.ok){e.textContent=r.error||'เข้าสู่ระบบไม่สำเร็จ';return;}
+  document.getElementById('lgPw').value='';enterApp();
+}
+async function doRegister(){
+  const e=document.getElementById('rgErr');e.textContent='';
+  const pw=document.getElementById('rgPw').value;
+  if(pw!==document.getElementById('rgPw2').value){e.textContent='ยืนยันรหัสผ่านไม่ตรงกัน';return;}
+  const r=await api('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('rgName').value.trim(),slug:document.getElementById('rgSlug').value.trim(),password:pw,signupCode:document.getElementById('rgCode').value})});
+  if(!r.ok){e.textContent=r.error||'สร้างไม่สำเร็จ';return;}
+  ['rgPw','rgPw2','rgCode'].forEach(i=>document.getElementById(i).value='');
+  await enterApp();
+  if(!S.config.tokenSet){toast('ขั้นต่อไป: วาง Channel Access Token ของ LINE OA ทีมคุณ');openConfig();}
+}
+async function logout(){await fetch('/api/auth/logout',{method:'POST'});S=null;showAuth();authMode('login');}
+async function enterApp(){
+  document.getElementById('view-auth').classList.add('hide');
+  document.getElementById('wsBox').classList.remove('hide');
+  view='list';document.getElementById('view-detail').classList.add('hide');document.getElementById('view-list').classList.remove('hide');
+  await refresh();
+}
+async function init(){
+  try{META=await (await fetch('/api/meta')).json();}catch{}
+  document.getElementById('rgCodeWrap').classList.toggle('hide',!META.signupCodeRequired);
+  const r=await fetch('/api/me');
+  if(r.status===200)enterApp();else showAuth();
+}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
 
 async function refresh(){
   S=await api('/api/state');
-  document.getElementById('botBadge').className='pill '+(S.config.tokenSet?'ok':'gray');
-  document.getElementById('botBadge').textContent=S.config.tokenSet?'เชื่อมต่อแล้ว':'ยังไม่เชื่อมต่อ';
+  document.getElementById('wsName').textContent='👥 '+(S.workspace.name||S.workspace.slug);
+  document.getElementById('botBadge').className='pill '+(S.config.tokenSet?'ok':'warn');
+  document.getElementById('botBadge').textContent=S.config.tokenSet?('LINE: '+(S.config.botName||'เชื่อมต่อแล้ว')):'ยังไม่เชื่อม LINE';
   if(view==='list')renderList();
 }
 
@@ -415,7 +504,7 @@ async function openDetail(id){
   }
   selTab('tab1');updateStatusUI();
 }
-function goList(){view='list';document.getElementById('view-detail').classList.add('hide');document.getElementById('view-list').classList.remove('hide');refresh();}
+function goList(){if(!S)return;view='list';document.getElementById('view-detail').classList.add('hide');document.getElementById('view-list').classList.remove('hide');refresh();}
 function curSet(){return S.sets[setId];}
 function curTab(){return curSet().tabs[tab];}
 function isCustom(){return curTab().template==='custom';}
@@ -535,8 +624,27 @@ async function reloadSet(){const id=setId;S=await api('/api/state');setId=id;upd
 function showJson(){const s=curSet();const o={name:s.name,chatBarText:s.chatBarText,schedule:s.schedule,tabs:{tab1:{template:s.tabs.tab1.template,areas:s.tabs.tab1.areas},tab2:{template:s.tabs.tab2.template,areas:s.tabs.tab2.areas}}};showLog([JSON.stringify(o,null,2)]);}
 
 // config
-function openConfig(){document.getElementById('cfgBar').value=S.config.chatBarText||'เมนู';document.getElementById('tokHint').textContent=S.config.tokenSet?'ตั้งแล้ว '+S.config.tokenHint:'ยังไม่ตั้ง';document.getElementById('tokHint').className='pill '+(S.config.tokenSet?'ok':'warn');document.getElementById('storeHint').innerHTML=S.storage==='supabase'?'✅ เก็บถาวรด้วย Supabase — ข้อมูลไม่หายตอน server restart':'⚠️ โหมด local — ข้อมูลจะหายเมื่อ server restart (ตั้ง SUPABASE_URL/KEY ใน Render เพื่อเก็บถาวร)';document.getElementById('mConfig').classList.add('on');}
-async function saveConfig(){const b={};const t=document.getElementById('cfgTok').value.trim(),se=document.getElementById('cfgSec').value.trim(),c=document.getElementById('cfgBar').value.trim();if(t)b.channelAccessToken=t;if(se)b.channelSecret=se;if(c)b.chatBarText=c;await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});toast('✅ บันทึกแล้ว');await refresh();}
+function openConfig(){
+  document.getElementById('cfgName').value=S.workspace.name||'';
+  document.getElementById('cfgTok').value='';document.getElementById('cfgSec').value='';
+  document.getElementById('cfgBar').value=S.config.chatBarText||'เมนู';
+  const th=document.getElementById('tokHint');th.textContent=S.config.tokenSet?'ตั้งแล้ว '+S.config.tokenHint:'ยังไม่ตั้ง';th.className='pill '+(S.config.tokenSet?'ok':'warn');
+  const sh=document.getElementById('secHint');sh.textContent=S.config.secretSet?'ตั้งแล้ว':'ยังไม่ตั้ง';sh.className='pill '+(S.config.secretSet?'ok':'gray');
+  document.getElementById('cfgHook').value=location.origin+'/webhook';
+  document.getElementById('connRes').innerHTML=S.config.botName?`<span class="pill ok">✅ ${esc(S.config.botName)} ${esc(S.config.botBasicId)}</span>`:'';
+  document.getElementById('storeHint').innerHTML=S.storage==='supabase'?'✅ เก็บถาวรใน Supabase — ข้อมูลไม่หายตอน server restart':'⚠️ โหมด local — ข้อมูลจะหายเมื่อ server restart';
+  document.getElementById('mConfig').classList.add('on');
+}
+async function saveConfig(){
+  const b={};const n=document.getElementById('cfgName').value.trim(),t=document.getElementById('cfgTok').value.trim(),se=document.getElementById('cfgSec').value.trim(),c=document.getElementById('cfgBar').value.trim();
+  if(n)b.name=n;if(t)b.channelAccessToken=t;if(se)b.channelSecret=se;if(c)b.chatBarText=c;
+  const r=await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  await refresh();openConfig();
+  if(r.warn)document.getElementById('connRes').innerHTML=`<span class="pill warn">❌ token ใช้ไม่ได้: ${esc(r.warn)}</span>`;
+  toast(r.bot?'✅ บันทึกแล้ว · เชื่อมกับ '+r.bot.displayName:'✅ บันทึกแล้ว');
+}
+function copyHook(){const i=document.getElementById('cfgHook');i.select();navigator.clipboard.writeText(i.value).then(()=>toast('คัดลอก Webhook URL แล้ว'));}
+async function changePw(){const r=await api('/api/auth/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current:document.getElementById('pwCur').value,newPassword:document.getElementById('pwNew').value})});if(r.ok){toast('✅ เปลี่ยนรหัสผ่านแล้ว');document.getElementById('pwCur').value='';document.getElementById('pwNew').value='';}else toast('❌ '+r.error);}
 async function testConn(){const el=document.getElementById('connRes');el.innerHTML='<span class="pill gray">กำลังทดสอบ...</span>';const r=await api('/api/test-connection',{method:'POST'});el.innerHTML=r.ok?`<span class="pill ok">✅ ${esc(r.bot.displayName)} (${esc(r.bot.basicId)})</span>`:`<span class="pill warn">❌ ${esc(r.error)}</span>`;await refresh();}
 async function resetAll(){if(!confirm('ลบ Rich Menu + alias ทั้งหมดบน channel?'))return;const r=await api('/api/reset-richmenus',{method:'POST'});showLog([...(r.logs||[]),r.ok?'✅ ลบเรียบร้อย':'❌ '+r.error],'cfgLog');await refresh();}
 
@@ -550,7 +658,7 @@ async function openLive(){document.getElementById('mLive').classList.add('on');d
     +`<div class="hint" style="margin-top:8px">Default ปัจจุบัน: ${r.defaultId?esc(r.defaultId):'— ไม่มี —'} · alias: ${(r.aliases||[]).map(a=>esc(a.richMenuAliasId)).join(', ')||'—'}</div>`;
 }
 
-refresh();
+init();
 </script>
 </body>
 </html>

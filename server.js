@@ -1,10 +1,14 @@
 /**
- * LINE Rich Menu Manager v2 — บุญถาวร
- * - หลายชุดเมนู (แต่ละชุด 2 แท็บ) + ดูสถานะสดจาก LINE
- * - ตั้งเวลาขึ้น-ลงอัตโนมัติ (scheduler) + กดเองได้
- * - Storage ยืดหยุ่น: ใช้ Supabase ถ้าตั้ง env ไว้ ไม่งั้นเก็บไฟล์ local (free-tier จะหายตอน restart)
- * - webhook เก็บ event การกดปุ่ม (groundwork สำหรับ segment/broadcast)
- * Pure Node.js (ไม่มี dependency) — รันด้วย node server.js (Node 18+)
+ * LINE Richmenu Setting — multi-workspace backend
+ * - 1 workspace = 1 ทีม / 1 LINE OA (ข้อมูลแยกกันสนิท, login ด้วยรหัสของ workspace)
+ * - เก็บถาวรใน Supabase (ตาราง workspaces, click_events + Storage สำหรับรูป)
+ *   ถ้าไม่ตั้ง SUPABASE_URL/KEY จะเก็บไฟล์ local (ใช้ทดสอบเท่านั้น)
+ * - Token/Secret ของแต่ละ OA เข้ารหัส AES-256-GCM ก่อนเก็บ
+ * - ตั้งเวลาขึ้น-ลงอัตโนมัติ (scheduler) + webhook เก็บการกดปุ่ม
+ * Pure Node.js 18+ (ไม่มี dependency)
+ *
+ * ENV: SUPABASE_URL, SUPABASE_KEY, SIGNUP_CODE (หรือ ADMIN_PASSWORD) = รหัสสำหรับสร้าง workspace ใหม่,
+ *      APP_SECRET (ไม่บังคับ — ใช้เข้ารหัส ถ้าไม่ตั้งจะใช้ค่าจาก SUPABASE_KEY)
  */
 
 const http = require('http');
@@ -14,36 +18,169 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
-const STATE_FILE = path.join(DATA_DIR, 'state.json');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const MENU_W = 2500;
 const MENU_H = 1686;
 const ALIASES = { tab1: 'switcher-tab-1', tab2: 'switcher-tab-2' };
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-const SUPA_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-const SUPA_KEY = process.env.SUPABASE_KEY || '';
+const SUPA_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+const SUPA_KEY = (process.env.SUPABASE_KEY || '').trim();
 const USE_SUPA = !!(SUPA_URL && SUPA_KEY);
+const SIGNUP_CODE = (process.env.SIGNUP_CODE || process.env.ADMIN_PASSWORD || '').trim();
+const SECRET = crypto.createHash('sha256').update(process.env.APP_SECRET || SUPA_KEY || 'local-dev-secret').digest();
+const BUCKET = 'richmenu-images';
 
-// ---------------------------------------------------------------- state
-function defaultState() {
-  return {
-    config: {
-      channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN || '',
-      channelSecret: process.env.CHANNEL_SECRET || '',
-      chatBarText: 'เมนู',
-    },
-    sets: {},          // id -> set
-    defaultSetId: null,
-    clicks: [],        // fallback เก็บ event ถ้าไม่ได้ใช้ Supabase (cap)
-  };
+// ---------------------------------------------------------------- crypto helpers
+function enc(text) {
+  if (!text) return '';
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', SECRET, iv);
+  const ct = Buffer.concat([c.update(String(text), 'utf8'), c.final()]);
+  return ['v1', iv.toString('base64'), c.getAuthTag().toString('base64'), ct.toString('base64')].join(':');
+}
+function dec(s) {
+  if (!s) return '';
+  try {
+    const [, iv, tag, ct] = s.split(':');
+    const d = crypto.createDecipheriv('aes-256-gcm', SECRET, Buffer.from(iv, 'base64'));
+    d.setAuthTag(Buffer.from(tag, 'base64'));
+    return Buffer.concat([d.update(Buffer.from(ct, 'base64')), d.final()]).toString('utf8');
+  } catch { return ''; }
+}
+function hashPw(pw) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return `scrypt$${salt}$${crypto.scryptSync(String(pw), salt, 32).toString('hex')}`;
+}
+function checkPw(pw, h) {
+  try {
+    const [, salt, hex] = String(h).split('$');
+    const a = crypto.scryptSync(String(pw), salt, 32);
+    const b = Buffer.from(hex, 'hex');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch { return false; }
+}
+function sign(v) { return crypto.createHmac('sha256', SECRET).update(v).digest('base64url'); }
+function makeSession(id) { const v = `${id}.${Date.now() + 30 * 864e5}`; return `${v}.${sign(v)}`; }
+function readSession(req) {
+  const m = /(?:^|;\s*)rm_session=([^;]+)/.exec(req.headers.cookie || '');
+  if (!m) return null;
+  const parts = decodeURIComponent(m[1]).split('.');
+  if (parts.length !== 3) return null;
+  const [id, exp, sig] = parts;
+  if (sign(`${id}.${exp}`) !== sig || Number(exp) < Date.now()) return null;
+  return id;
+}
+function sessionCookie(req, value, maxAge) {
+  const secure = (req.headers['x-forwarded-proto'] || '').includes('https') ? '; Secure' : '';
+  return `rm_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
-function newTab(name) {
-  return { name, template: 'tabbar-6', areas: [], image: null };
+// ---------------------------------------------------------------- Supabase helpers
+function sbHeaders(extra) {
+  const h = { apikey: SUPA_KEY, ...(extra || {}) };
+  if (SUPA_KEY.startsWith('eyJ')) h.Authorization = `Bearer ${SUPA_KEY}`; // legacy service_role (JWT)
+  return h;
 }
-function tabIds(s) { return (s.tabCount === 1) ? ['tab1'] : ['tab1', 'tab2']; }
+async function sb(method, p, body, prefer) {
+  const h = sbHeaders({ 'Content-Type': 'application/json' });
+  if (prefer) h.Prefer = prefer;
+  const r = await fetch(`${SUPA_URL}/rest/v1/${p}`, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+  const t = await r.text();
+  if (!r.ok) throw new Error(`Supabase ${r.status}: ${t.slice(0, 300)}`);
+  try { return t ? JSON.parse(t) : null; } catch { return null; }
+}
+function sbStorage(method, p, body, headers) {
+  return fetch(`${SUPA_URL}/storage/v1/${p}`, { method, headers: sbHeaders(headers), body });
+}
+async function ensureBucket() {
+  try {
+    const r = await sbStorage('POST', 'bucket', JSON.stringify({ id: BUCKET, name: BUCKET, public: false }), { 'Content-Type': 'application/json' });
+    if (!r.ok) {
+      const t = await r.text();
+      if (!/already exists|duplicate|409/i.test(`${r.status} ${t}`)) console.error('สร้าง bucket ไม่สำเร็จ:', r.status, t.slice(0, 200));
+    }
+  } catch (e) { console.error('ensureBucket', e.message); }
+}
+
+// ---------------------------------------------------------------- storage layer (Supabase หรือ local)
+const LOCAL_FILE = path.join(DATA_DIR, 'db.json');
+const LOCAL_IMG = path.join(DATA_DIR, 'img');
+let localDb = { workspaces: [], clicks: [] };
+const imgCache = new Map();
+function localWrite() { fs.writeFileSync(LOCAL_FILE, JSON.stringify(localDb)); }
+
+const store = {
+  async loadAll() {
+    if (USE_SUPA) return (await sb('GET', 'workspaces?select=*')) || [];
+    try { localDb = JSON.parse(fs.readFileSync(LOCAL_FILE, 'utf8')); } catch { localDb = { workspaces: [], clicks: [] }; }
+    return localDb.workspaces;
+  },
+  async insert(row) {
+    if (USE_SUPA) { const r = await sb('POST', 'workspaces', [row], 'return=representation'); return r[0]; }
+    const saved = { ...row, id: crypto.randomUUID(), created_at: new Date().toISOString() };
+    localDb.workspaces.push(saved); localWrite(); return saved;
+  },
+  async save(ws) {
+    const patch = { name: ws.name, password_hash: ws.password_hash, bot_user_id: ws.bot_user_id || null, data: ws.data, updated_at: new Date().toISOString() };
+    if (USE_SUPA) { await sb('PATCH', `workspaces?id=eq.${ws.id}`, patch, 'return=minimal'); return; }
+    const i = localDb.workspaces.findIndex((w) => w.id === ws.id);
+    if (i >= 0) { localDb.workspaces[i] = { ...localDb.workspaces[i], ...patch }; localWrite(); }
+  },
+  async putImg(key, buf) {
+    if (USE_SUPA) {
+      const r = await sbStorage('POST', `object/${BUCKET}/${key}`, buf, { 'Content-Type': 'image/jpeg', 'x-upsert': 'true' });
+      if (!r.ok) throw new Error(`อัปโหลดรูปไป Supabase ไม่สำเร็จ (${r.status}): ${(await r.text()).slice(0, 200)}`);
+    } else {
+      const f = path.join(LOCAL_IMG, key); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, buf);
+    }
+    imgCache.set(key, buf);
+  },
+  async getImg(key) {
+    if (imgCache.has(key)) return imgCache.get(key);
+    let buf = null;
+    if (USE_SUPA) {
+      const r = await sbStorage('GET', `object/${BUCKET}/${key}`);
+      if (r.ok) buf = Buffer.from(await r.arrayBuffer());
+    } else { try { buf = fs.readFileSync(path.join(LOCAL_IMG, key)); } catch {} }
+    if (buf) imgCache.set(key, buf);
+    return buf;
+  },
+  async delImgs(keys) {
+    keys.forEach((k) => imgCache.delete(k));
+    if (!keys.length) return;
+    if (USE_SUPA) { await sbStorage('DELETE', `object/${BUCKET}`, JSON.stringify({ prefixes: keys }), { 'Content-Type': 'application/json' }).catch(() => {}); return; }
+    for (const k of keys) { try { fs.unlinkSync(path.join(LOCAL_IMG, k)); } catch {} }
+  },
+  async addClick(row) {
+    if (USE_SUPA) { await sb('POST', 'click_events', [row], 'return=minimal'); return; }
+    localDb.clicks.push(row); if (localDb.clicks.length > 20000) localDb.clicks.shift(); localWrite();
+  },
+  async clicks(wsId) {
+    if (USE_SUPA) return (await sb('GET', `click_events?workspace_id=eq.${wsId}&select=button_tag,user_id&limit=50000`)) || [];
+    return localDb.clicks.filter((c) => c.workspace_id === wsId);
+  },
+};
+
+// ---------------------------------------------------------------- workspaces (cache ในหน่วยความจำ)
+const WS = new Map();
+function normData(d) {
+  d = d && typeof d === 'object' ? d : {};
+  d.config = d.config || {};
+  if (!d.config.chatBarText) d.config.chatBarText = 'เมนู';
+  d.sets = d.sets || {};
+  if (d.defaultSetId === undefined) d.defaultSetId = null;
+  return d;
+}
+function wsBySlug(slug) { for (const w of WS.values()) if (w.slug === slug) return w; return null; }
+function tokenOf(ws) { return dec(ws.data.config.tokenEnc); }
+function secretOf(ws) { return dec(ws.data.config.secretEnc); }
+function saveWs(ws) { return store.save(ws); }
+function imgKey(ws, setId, tab) { return `${ws.id}/${setId}/${tab}.jpg`; }
+
+// ---------------------------------------------------------------- sets
+function tabIds(s) { return s.tabCount === 1 ? ['tab1'] : ['tab1', 'tab2']; }
+function newTab(name) { return { name, template: 'tabbar-6', areas: [], image: null }; }
 function newSet(name, layout, tabCount) {
   const id = crypto.randomUUID();
   const slug = (name || 'menu').toLowerCase().replace(/[^a-z0-9ก-๙]+/gi, '-').replace(/^-|-$/g, '').slice(0, 24) || 'menu';
@@ -55,66 +192,12 @@ function newSet(name, layout, tabCount) {
     chatBarText: 'เมนู',
     schedule: { startAt: '', endAt: '' },
     tabs: { tab1: t1, tab2: t2 },
-    status: 'draft',           // draft | scheduled | live | ended
+    status: 'draft',
     draftSavedAt: null,
     lastModifiedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
-    published: null,           // { tab1, tab2, at }
+    published: null,
   };
-}
-
-let state = defaultState();
-
-// ---------------------------------------------------------------- storage layer
-async function sbReq(method, pathq, body, extraPrefer) {
-  const headers = {
-    apikey: SUPA_KEY,
-    Authorization: `Bearer ${SUPA_KEY}`,
-    'Content-Type': 'application/json',
-  };
-  if (method === 'POST') headers.Prefer = 'resolution=merge-duplicates,return=representation';
-  if (extraPrefer) headers.Prefer = extraPrefer;
-  const res = await fetch(`${SUPA_URL}/rest/v1/${pathq}`, {
-    method, headers, body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Supabase ${res.status}: ${text}`);
-  try { return text ? JSON.parse(text) : null; } catch { return null; }
-}
-
-async function loadState() {
-  if (USE_SUPA) {
-    try {
-      const rows = await sbReq('GET', 'app_state?id=eq.main&select=data');
-      if (rows && rows[0] && rows[0].data) { state = applyEnv(rows[0].data); return; }
-      state = defaultState(); await saveState(); return;
-    } catch (e) {
-      console.error('โหลดจาก Supabase ไม่สำเร็จ, ใช้ค่าเริ่มต้น:', e.message);
-      state = defaultState(); return;
-    }
-  }
-  try { state = applyEnv(JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'))); }
-  catch { state = defaultState(); }
-}
-
-function applyEnv(s) {
-  s = Object.assign(defaultState(), s);
-  if (!s.config) s.config = defaultState().config;
-  if (process.env.CHANNEL_ACCESS_TOKEN) s.config.channelAccessToken = process.env.CHANNEL_ACCESS_TOKEN;
-  if (process.env.CHANNEL_SECRET) s.config.channelSecret = process.env.CHANNEL_SECRET;
-  if (!s.sets) s.sets = {};
-  if (!Array.isArray(s.clicks)) s.clicks = [];
-  return s;
-}
-
-let saveQueued = false;
-async function saveState() {
-  if (USE_SUPA) {
-    try { await sbReq('POST', 'app_state', [{ id: 'main', data: state, updated_at: new Date().toISOString() }]); }
-    catch (e) { console.error('บันทึก Supabase ไม่สำเร็จ:', e.message); }
-    return;
-  }
-  try { fs.writeFileSync(STATE_FILE, JSON.stringify(state)); } catch (e) { console.error(e.message); }
 }
 
 // ---------------------------------------------------------------- LINE API
@@ -137,11 +220,6 @@ async function lineApi(method, url, { token, body, rawBody, contentType } = {}) 
   return json;
 }
 
-function dataUrlToBuffer(dataUrl) {
-  const m = /^data:image\/jpeg;base64,(.+)$/.exec(dataUrl || '');
-  return m ? Buffer.from(m[1], 'base64') : null;
-}
-
 function buildLineAreas(tab) {
   return (tab.areas || []).filter((a) => a.action.type !== 'none').map((a) => {
     const x = Math.max(0, Math.round(a.x));
@@ -156,7 +234,6 @@ function buildLineAreas(tab) {
       }
       case 'uri': action = { type: 'uri', uri: a.action.value }; break;
       case 'message': action = { type: 'message', text: a.action.value }; break;
-      case 'track': action = { type: 'postback', data: a.action.value || 'btn', displayText: undefined }; break;
       default: action = { type: 'postback', data: a.action.value || 'noop' };
     }
     return { bounds, action };
@@ -185,7 +262,7 @@ function validateSet(s) {
     t.areas.forEach((a, i) => {
       const n = i + 1; const v = String((a.action && a.action.value) || '').trim();
       if (a.action.type === 'none' || a.action.type === 'switch') return;
-      if (a.action.type === 'uri' || a.action.type === 'track') {
+      if (a.action.type === 'uri') {
         const placeholder = v === '' || v === 'https://' || v === 'http://';
         const valid = /^(https?:\/\/.+|line:\/\/.+|tel:.+|mailto:.+)/i.test(v);
         if (placeholder || !valid) throw new Error(`${t.name} — ปุ่มที่ ${n}: ยังไม่ได้ใส่ลิงก์ (ใส่ URL เต็ม เช่น https://www.example.com)`);
@@ -195,19 +272,18 @@ function validateSet(s) {
   }
 }
 
-async function publishSet(setId, { auto = false } = {}) {
+async function publishSet(ws, setId, { auto = false } = {}) {
   const logs = []; const log = (m) => logs.push(m);
-  const token = state.config.channelAccessToken;
-  if (!token) throw Object.assign(new Error('ยังไม่ได้ตั้งค่า Channel Access Token'), { logs });
-  const s = state.sets[setId];
+  const token = tokenOf(ws);
+  const D = ws.data;
+  if (!token) throw Object.assign(new Error('ยังไม่ได้ตั้งค่า Channel Access Token (ปุ่ม "ตั้งค่าระบบ")'), { logs });
+  const s = D.sets[setId];
   if (!s) throw Object.assign(new Error('ไม่พบชุดเมนู'), { logs });
-  if (!auto) {
-    if (!s.draftSavedAt || (s.lastModifiedAt && s.draftSavedAt < s.lastModifiedAt))
-      throw Object.assign(new Error('กรุณากด "บันทึกแบบร่าง" ก่อน Deploy'), { logs });
-  }
-  validateSet(s);
+  if (!auto && (!s.draftSavedAt || (s.lastModifiedAt && s.draftSavedAt < s.lastModifiedAt)))
+    throw Object.assign(new Error('กรุณากด "บันทึกแบบร่าง" ก่อน Deploy'), { logs });
+  try { validateSet(s); } catch (e) { e.logs = logs; throw e; }
 
-  const prevDefault = state.defaultSetId && state.sets[state.defaultSetId];
+  const prevDefault = D.defaultSetId && D.sets[D.defaultSetId];
   const oldPublished = s.published;
   const newIds = {};
   try {
@@ -216,14 +292,13 @@ async function publishSet(setId, { auto = false } = {}) {
       const menu = {
         size: { width: MENU_W, height: MENU_H }, selected: true,
         name: `${s.slug}-${id}-${Date.now()}`.slice(0, 300),
-        chatBarText: s.chatBarText || state.config.chatBarText || 'เมนู',
-        // เมนู 1 แท็บ: ไม่มี alias ให้สลับ จึงตัดปุ่มสลับแท็บออก
+        chatBarText: s.chatBarText || D.config.chatBarText || 'เมนู',
         areas: buildLineAreas(s.tabCount === 1 ? { areas: t.areas.filter((a) => a.action.type !== 'switch') } : t),
       };
       const { richMenuId } = await lineApi('POST', 'https://api.line.me/v2/bot/richmenu', { token, body: menu });
       log(`สร้าง rich menu "${t.name}" (${richMenuId})`);
-      const imgBuf = dataUrlToBuffer(t.image);
-      if (!imgBuf) throw new Error(`${t.name}: รูปไม่ถูกต้อง`);
+      const imgBuf = await store.getImg(imgKey(ws, s.id, id));
+      if (!imgBuf) throw new Error(`${t.name}: ไม่พบไฟล์รูป กรุณาอัปโหลดใหม่`);
       await lineApi('POST', `https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`, { token, rawBody: imgBuf, contentType: 'image/jpeg' });
       log(`อัปโหลดรูป "${t.name}" (${Math.round(imgBuf.length / 1024)} KB)`);
       newIds[id] = richMenuId;
@@ -235,12 +310,10 @@ async function publishSet(setId, { auto = false } = {}) {
     await lineApi('POST', `https://api.line.me/v2/bot/user/all/richmenu/${newIds.tab1}`, { token });
     log('ตั้งเป็นเมนูเริ่มต้นของผู้ใช้ทุกคนแล้ว');
 
-    // ลบเมนูเก่าของชุดนี้
     if (oldPublished) for (const id of ['tab1', 'tab2']) {
       const oid = oldPublished[id];
       if (oid && oid !== newIds[id]) { try { await lineApi('DELETE', `https://api.line.me/v2/bot/richmenu/${oid}`, { token }); } catch {} }
     }
-    // ชุด default เดิม (ถ้าเป็นคนละชุด) → ปลดสถานะ + ลบเมนูมันออกจาก channel
     if (prevDefault && prevDefault.id !== s.id) {
       if (prevDefault.published) for (const id of ['tab1', 'tab2']) {
         const oid = prevDefault.published[id];
@@ -249,11 +322,10 @@ async function publishSet(setId, { auto = false } = {}) {
       prevDefault.status = 'ended'; prevDefault.published = null;
       log(`ปลดชุดเดิม "${prevDefault.name}" ออก`);
     }
-
     s.published = { ...newIds, at: new Date().toISOString() };
     s.status = 'live';
-    state.defaultSetId = s.id;
-    await saveState();
+    D.defaultSetId = s.id;
+    await saveWs(ws);
     return { logs };
   } catch (e) {
     for (const idv of Object.values(newIds)) { try { await lineApi('DELETE', `https://api.line.me/v2/bot/richmenu/${idv}`, { token }); } catch {} }
@@ -261,33 +333,39 @@ async function publishSet(setId, { auto = false } = {}) {
   }
 }
 
-async function endSet(setId) {
-  const token = state.config.channelAccessToken;
-  const s = state.sets[setId]; if (!s) return;
-  try { await lineApi('DELETE', 'https://api.line.me/v2/bot/user/all/richmenu', { token }); } catch {}
-  if (s.published) for (const id of ['tab1', 'tab2']) {
-    const oid = s.published[id]; if (oid) { try { await lineApi('DELETE', `https://api.line.me/v2/bot/richmenu/${oid}`, { token }); } catch {} }
+async function endSet(ws, setId) {
+  const token = tokenOf(ws);
+  const D = ws.data;
+  const s = D.sets[setId]; if (!s) return;
+  if (token) {
+    if (D.defaultSetId === s.id) { try { await lineApi('DELETE', 'https://api.line.me/v2/bot/user/all/richmenu', { token }); } catch {} }
+    if (s.published) for (const id of ['tab1', 'tab2']) {
+      const oid = s.published[id]; if (oid) { try { await lineApi('DELETE', `https://api.line.me/v2/bot/richmenu/${oid}`, { token }); } catch {} }
+    }
   }
   s.status = 'ended'; s.published = null;
-  if (state.defaultSetId === s.id) state.defaultSetId = null;
-  await saveState();
+  if (D.defaultSetId === s.id) D.defaultSetId = null;
+  await saveWs(ws);
 }
 
-// ---------------------------------------------------------------- scheduler
+// ---------------------------------------------------------------- scheduler (ทุก workspace)
 let ticking = false;
 async function tick() {
-  if (ticking || !state.config.channelAccessToken) return;
+  if (ticking) return;
   ticking = true;
   const now = Date.now();
   try {
-    for (const s of Object.values(state.sets)) {
-      const start = s.schedule && s.schedule.startAt ? new Date(s.schedule.startAt).getTime() : null;
-      const end = s.schedule && s.schedule.endAt ? new Date(s.schedule.endAt).getTime() : null;
-      if (s.status === 'scheduled' && start && start <= now && (!end || end > now)) {
-        try { await publishSet(s.id, { auto: true }); } catch (e) { console.error('auto publish', e.message); }
-      }
-      if (s.status === 'live' && end && end <= now) {
-        try { await endSet(s.id); } catch (e) { console.error('auto end', e.message); }
+    for (const ws of WS.values()) {
+      if (!tokenOf(ws)) continue;
+      for (const s of Object.values(ws.data.sets)) {
+        const start = s.schedule && s.schedule.startAt ? new Date(s.schedule.startAt).getTime() : null;
+        const end = s.schedule && s.schedule.endAt ? new Date(s.schedule.endAt).getTime() : null;
+        if (s.status === 'scheduled' && start && start <= now && (!end || end > now)) {
+          try { await publishSet(ws, s.id, { auto: true }); } catch (e) { console.error(`[${ws.slug}] auto publish`, e.message); }
+        }
+        if (s.status === 'live' && end && end <= now) {
+          try { await endSet(ws, s.id); } catch (e) { console.error(`[${ws.slug}] auto end`, e.message); }
+        }
       }
     }
   } finally { ticking = false; }
@@ -303,50 +381,65 @@ function readBody(req, limit = 8 * 1024 * 1024) {
     req.on('error', reject);
   });
 }
-function sendJson(res, code, obj) {
+async function readJson(req) { const raw = (await readBody(req)).toString(); return raw ? JSON.parse(raw) : {}; }
+function sendJson(res, code, obj, headers) {
   const buf = Buffer.from(JSON.stringify(obj));
-  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': buf.length });
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': buf.length, ...(headers || {}) });
   res.end(buf);
 }
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.ico': 'image/x-icon' };
-function serveFile(res, filePath) {
+function serveFile(res, filePath, type, cache) {
   fs.readFile(filePath, (err, buf) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': cache || 'no-cache' });
     res.end(buf);
   });
 }
 
-// คืน state เบาๆ (ไม่แนบ base64 รูป — ใช้ URL แทน)
-function publicState() {
-  const s = JSON.parse(JSON.stringify(state));
-  const tkn = s.config.channelAccessToken;
-  s.config.tokenSet = !!tkn;
-  s.config.tokenHint = tkn ? '••••••' + tkn.slice(-6) : '';
-  s.config.secretSet = !!s.config.channelSecret;
-  delete s.config.channelAccessToken; delete s.config.channelSecret;
-  delete s.clicks;
-  s.storage = USE_SUPA ? 'supabase' : 'local';
-  for (const set of Object.values(s.sets)) {
+function publicState(ws) {
+  const d = JSON.parse(JSON.stringify(ws.data));
+  const t = tokenOf(ws);
+  const out = {
+    workspace: { id: ws.id, slug: ws.slug, name: ws.name },
+    config: { tokenSet: !!t, tokenHint: t ? '••••••' + t.slice(-6) : '', secretSet: !!secretOf(ws), chatBarText: d.config.chatBarText, botName: d.config.botName || '', botBasicId: d.config.botBasicId || '' },
+    sets: d.sets,
+    defaultSetId: d.defaultSetId,
+    storage: USE_SUPA ? 'supabase' : 'local',
+  };
+  for (const set of Object.values(out.sets)) {
     for (const id of ['tab1', 'tab2']) {
-      const t = set.tabs[id];
-      t.hasImage = !!t.image;
-      t.image = t.image ? `/api/sets/${set.id}/${id}/image?t=${Date.parse(set.lastModifiedAt) || 0}` : null;
+      const tb = set.tabs[id];
+      tb.hasImage = !!tb.image;
+      tb.image = tb.image ? `/api/sets/${set.id}/${id}/image?v=${encodeURIComponent(tb.image)}` : null;
     }
   }
-  return s;
+  return out;
 }
 
-// ---------------------------------------------------------------- webhook tracking
-function recordClick(ev, destination) {
+// ดึงข้อมูลบอทเพื่อผูก webhook กับ workspace ที่ถูกต้อง
+async function refreshBotInfo(ws) {
+  const token = tokenOf(ws);
+  if (!token) return null;
+  const info = await lineApi('GET', 'https://api.line.me/v2/bot/info', { token });
+  ws.bot_user_id = info.userId || null;
+  ws.data.config.botName = info.displayName || '';
+  ws.data.config.botBasicId = info.basicId || '';
+  await saveWs(ws);
+  return info;
+}
+
+async function recordClick(ws, ev) {
   const userId = ev.source && ev.source.userId;
   if (!userId) return;
   const data = (ev.postback && ev.postback.data) || '';
   const tag = /(?:^|[&;])(?:btn|tag)=([^&;]+)/.exec(data);
   const sw = /switch=(tab\d)/.exec(data);
-  const row = { user_id: userId, button_tag: tag ? decodeURIComponent(tag[1]) : (sw ? 'switch:' + sw[1] : data || 'postback'), tab: sw ? sw[1] : '', clicked_at: new Date(ev.timestamp || Date.now()).toISOString(), destination };
-  if (USE_SUPA) { sbReq('POST', 'click_events', [row], 'return=minimal').catch(() => {}); }
-  else { state.clicks.push(row); if (state.clicks.length > 5000) state.clicks.shift(); saveState(); }
+  const row = {
+    workspace_id: ws.id, user_id: userId,
+    button_tag: tag ? decodeURIComponent(tag[1]) : (sw ? 'switch:' + sw[1] : data || 'postback'),
+    tab: sw ? sw[1] : '',
+    clicked_at: new Date(ev.timestamp || Date.now()).toISOString(),
+  };
+  try { await store.addClick(row); } catch (e) { console.error('click', e.message); }
 }
 
 // ---------------------------------------------------------------- server
@@ -354,86 +447,139 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://x');
     const p = url.pathname;
+    const M = req.method;
 
-    // webhook + health ไม่ต้อง auth
-    if (p === '/webhook' && req.method === 'POST') {
+    // ----- public -----
+    if (M === 'GET' && (p === '/' || p === '/index.html')) return serveFile(res, path.join(__dirname, 'index.html'), 'text/html; charset=utf-8');
+    if (M === 'GET' && p === '/logo.png') return serveFile(res, path.join(__dirname, 'logo.png'), 'image/png', 'public, max-age=86400');
+    if (M === 'GET' && (p === '/favicon.png' || p === '/favicon.ico')) return serveFile(res, path.join(__dirname, 'favicon.png'), 'image/png', 'public, max-age=86400');
+    if (p === '/health' || p === '/cron') { tick().catch(() => {}); res.writeHead(200); return res.end('ok'); }
+
+    if (p === '/webhook' && M === 'POST') {
       const raw = await readBody(req);
-      // verify signature ถ้ามี channelSecret
-      if (state.config.channelSecret) {
-        const sig = crypto.createHmac('SHA256', state.config.channelSecret).update(raw).digest('base64');
-        if (sig !== req.headers['x-line-signature']) { res.writeHead(401); return res.end('bad signature'); }
-      }
       let body = {}; try { body = JSON.parse(raw.toString() || '{}'); } catch {}
-      for (const ev of body.events || []) { if (ev.type === 'postback') recordClick(ev, body.destination); }
+      const ws = [...WS.values()].find((w) => w.bot_user_id && w.bot_user_id === body.destination);
+      if (ws) {
+        const sec = secretOf(ws);
+        if (sec) {
+          const sig = crypto.createHmac('SHA256', sec).update(raw).digest('base64');
+          if (sig !== req.headers['x-line-signature']) { res.writeHead(401); return res.end('bad signature'); }
+        }
+        for (const ev of body.events || []) if (ev.type === 'postback') await recordClick(ws, ev);
+      }
       res.writeHead(200); return res.end('OK');
     }
-    if (p === '/health' || p === '/cron') { tick().catch(() => {}); res.writeHead(200); return res.end('ok'); }
-    if (req.method === 'GET' && (p === '/logo.png' || p === '/favicon.png' || p === '/favicon.ico')) {
-      const f = path.join(__dirname, p === '/logo.png' ? 'logo.png' : 'favicon.png');
-      return fs.readFile(f, (err, buf) => {
-        if (err) { res.writeHead(404); return res.end(); }
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }); res.end(buf);
-      });
+
+    if (p === '/api/meta' && M === 'GET') return sendJson(res, 200, { signupCodeRequired: !!SIGNUP_CODE, storage: USE_SUPA ? 'supabase' : 'local' });
+
+    if (p === '/api/auth/register' && M === 'POST') {
+      const b = await readJson(req);
+      const slug = String(b.slug || '').trim().toLowerCase();
+      const name = String(b.name || '').trim().slice(0, 60);
+      const pw = String(b.password || '');
+      if (SIGNUP_CODE && String(b.signupCode || '').trim() !== SIGNUP_CODE) return sendJson(res, 403, { error: 'รหัสสร้าง workspace ไม่ถูกต้อง (ขอจากผู้ดูแลระบบ)' });
+      if (!/^[a-z0-9][a-z0-9-]{2,30}$/.test(slug)) return sendJson(res, 400, { error: 'Workspace ID ใช้ได้เฉพาะ a-z, 0-9, ขีด (-) ยาว 3–31 ตัว' });
+      if (!name) return sendJson(res, 400, { error: 'กรุณาใส่ชื่อทีม/แบรนด์' });
+      if (pw.length < 6) return sendJson(res, 400, { error: 'รหัสผ่านอย่างน้อย 6 ตัว' });
+      if (wsBySlug(slug)) return sendJson(res, 409, { error: 'Workspace ID นี้มีคนใช้แล้ว' });
+      const data = normData({});
+      // workspace แรกของระบบ: ดึง token เดิมจาก env มาใช้ให้อัตโนมัติ
+      if (WS.size === 0 && process.env.CHANNEL_ACCESS_TOKEN) {
+        data.config.tokenEnc = enc(process.env.CHANNEL_ACCESS_TOKEN);
+        if (process.env.CHANNEL_SECRET) data.config.secretEnc = enc(process.env.CHANNEL_SECRET);
+      }
+      const saved = await store.insert({ slug, name, password_hash: hashPw(pw), bot_user_id: null, data });
+      saved.data = normData(saved.data);
+      WS.set(saved.id, saved);
+      if (tokenOf(saved)) refreshBotInfo(saved).catch(() => {});
+      return sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, makeSession(saved.id), 2592000) });
     }
 
-    // basic auth (admin)
-    if (ADMIN_PASSWORD) {
-      const [scheme, encoded] = (req.headers.authorization || '').split(' ');
-      const pass = scheme === 'Basic' && encoded ? Buffer.from(encoded, 'base64').toString().split(':').slice(1).join(':') : '';
-      if (pass !== ADMIN_PASSWORD) { res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="RichMenu"' }); return res.end('Authentication required'); }
+    if (p === '/api/auth/login' && M === 'POST') {
+      const b = await readJson(req);
+      const ws = wsBySlug(String(b.slug || '').trim().toLowerCase());
+      if (!ws || !checkPw(b.password || '', ws.password_hash)) {
+        await new Promise((r) => setTimeout(r, 600));
+        return sendJson(res, 401, { error: 'Workspace ID หรือรหัสผ่านไม่ถูกต้อง' });
+      }
+      return sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, makeSession(ws.id), 2592000) });
     }
 
-    // static
-    if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
-      const root = path.join(__dirname, 'index.html');
-      return serveFile(res, fs.existsSync(root) ? root : path.join(__dirname, 'public', 'index.html'));
+    if (p === '/api/auth/logout' && M === 'POST') return sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
+
+    // ----- ต้อง login -----
+    if (!p.startsWith('/api/')) { res.writeHead(404); return res.end('Not found'); }
+    const ws = WS.get(readSession(req));
+    if (!ws) return sendJson(res, 401, { error: 'unauthorized' });
+    const D = ws.data;
+
+    if (p === '/api/me' && M === 'GET') return sendJson(res, 200, { ok: true, workspace: { id: ws.id, slug: ws.slug, name: ws.name } });
+    if (p === '/api/state' && M === 'GET') return sendJson(res, 200, publicState(ws));
+
+    if (p === '/api/auth/password' && M === 'POST') {
+      const b = await readJson(req);
+      if (!checkPw(b.current || '', ws.password_hash)) return sendJson(res, 400, { error: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' });
+      if (String(b.newPassword || '').length < 6) return sendJson(res, 400, { error: 'รหัสผ่านใหม่อย่างน้อย 6 ตัว' });
+      ws.password_hash = hashPw(b.newPassword); await saveWs(ws);
+      return sendJson(res, 200, { ok: true });
     }
 
-    // serve stored image of a set tab
-    let m = p.match(/^\/api\/sets\/([^/]+)\/(tab1|tab2)\/image$/);
-    if (m && req.method === 'GET') {
-      const set = state.sets[m[1]];
-      const buf = set && dataUrlToBuffer(set.tabs[m[2]].image);
-      if (!buf) { res.writeHead(404); return res.end('no image'); }
-      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache' });
-      return res.end(buf);
+    if (p === '/api/config' && M === 'POST') {
+      const b = await readJson(req);
+      if (b.name) ws.name = String(b.name).slice(0, 60);
+      if (b.channelAccessToken) D.config.tokenEnc = enc(String(b.channelAccessToken).trim());
+      if (b.channelSecret) D.config.secretEnc = enc(String(b.channelSecret).trim());
+      if (b.chatBarText) D.config.chatBarText = String(b.chatBarText).slice(0, 14);
+      await saveWs(ws);
+      let bot = null, warn = '';
+      if (b.channelAccessToken) { try { bot = await refreshBotInfo(ws); } catch (e) { warn = e.message; } }
+      return sendJson(res, 200, { ok: true, bot, warn });
     }
 
-    // ---------- API ----------
-    if (p === '/api/state' && req.method === 'GET') return sendJson(res, 200, publicState());
-
-    if (p === '/api/config' && req.method === 'POST') {
-      const b = JSON.parse((await readBody(req)).toString() || '{}');
-      if (b.channelAccessToken) state.config.channelAccessToken = String(b.channelAccessToken).trim();
-      if (b.channelSecret !== undefined) state.config.channelSecret = String(b.channelSecret).trim();
-      if (b.chatBarText) state.config.chatBarText = String(b.chatBarText).slice(0, 14);
-      await saveState(); return sendJson(res, 200, { ok: true });
-    }
-
-    if (p === '/api/test-connection' && req.method === 'POST') {
+    if (p === '/api/test-connection' && M === 'POST') {
       try {
-        const token = state.config.channelAccessToken;
-        if (!token) return sendJson(res, 400, { ok: false, error: 'ยังไม่ได้ใส่ Channel Access Token' });
-        const info = await lineApi('GET', 'https://api.line.me/v2/bot/info', { token });
+        if (!tokenOf(ws)) return sendJson(res, 400, { ok: false, error: 'ยังไม่ได้ใส่ Channel Access Token' });
+        const info = await refreshBotInfo(ws);
         return sendJson(res, 200, { ok: true, bot: info });
       } catch (e) { return sendJson(res, 400, { ok: false, error: e.message }); }
     }
 
-    // create set
-    if (p === '/api/sets' && req.method === 'POST') {
-      const b = JSON.parse((await readBody(req)).toString() || '{}');
+    if (p === '/api/sets' && M === 'POST') {
+      const b = await readJson(req);
       const s = newSet(b.name, b.layout, Number(b.tabCount) === 1 ? 1 : 2);
-      state.sets[s.id] = s; await saveState();
+      D.sets[s.id] = s; await saveWs(ws);
       return sendJson(res, 200, { ok: true, id: s.id });
     }
 
-    // set-level ops
+    let m = p.match(/^\/api\/sets\/([^/]+)\/(tab1|tab2)\/image$/);
+    if (m) {
+      const s = D.sets[m[1]]; if (!s) return sendJson(res, 404, { error: 'ไม่พบชุดเมนู' });
+      if (M === 'GET') {
+        const buf = await store.getImg(imgKey(ws, s.id, m[2]));
+        if (!buf) { res.writeHead(404); return res.end('no image'); }
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' });
+        return res.end(buf);
+      }
+      if (M === 'POST') {
+        const b = await readJson(req);
+        const mm = /^data:image\/jpeg;base64,(.+)$/.exec(b.dataUrl || '');
+        if (!mm) return sendJson(res, 400, { error: 'รูปต้องเป็น JPEG' });
+        const buf = Buffer.from(mm[1], 'base64');
+        if (buf.length > 1024 * 1024) return sendJson(res, 400, { error: `รูปใหญ่เกิน 1MB (${Math.round(buf.length / 1024)} KB)` });
+        await store.putImg(imgKey(ws, s.id, m[2]), buf);
+        s.tabs[m[2]].image = new Date().toISOString();
+        s.lastModifiedAt = new Date().toISOString();
+        await saveWs(ws);
+        return sendJson(res, 200, { ok: true, sizeKB: Math.round(buf.length / 1024) });
+      }
+    }
+
     m = p.match(/^\/api\/sets\/([^/]+)$/);
     if (m) {
-      const s = state.sets[m[1]];
+      const s = D.sets[m[1]];
       if (!s) return sendJson(res, 404, { error: 'ไม่พบชุดเมนู' });
-      if (req.method === 'POST') {
-        const b = JSON.parse((await readBody(req)).toString() || '{}');
+      if (M === 'POST') {
+        const b = await readJson(req);
         if (b.name !== undefined) s.name = String(b.name).slice(0, 60);
         if (b.chatBarText !== undefined) s.chatBarText = String(b.chatBarText).slice(0, 14);
         if (b.schedule) s.schedule = { startAt: String(b.schedule.startAt || ''), endAt: String(b.schedule.endAt || '') };
@@ -444,126 +590,103 @@ const server = http.createServer(async (req, res) => {
           if (Array.isArray(b.tabs[id].areas)) t.areas = b.tabs[id].areas;
         }
         s.lastModifiedAt = new Date().toISOString();
-        await saveState(); return sendJson(res, 200, { ok: true });
+        await saveWs(ws); return sendJson(res, 200, { ok: true });
       }
-      if (req.method === 'DELETE') {
-        if (s.status === 'live') { try { await endSet(s.id); } catch {} }
-        delete state.sets[m[1]];
-        if (state.defaultSetId === m[1]) state.defaultSetId = null;
-        await saveState(); return sendJson(res, 200, { ok: true });
+      if (M === 'DELETE') {
+        if (s.status === 'live') { try { await endSet(ws, s.id); } catch {} }
+        await store.delImgs(['tab1', 'tab2'].map((t) => imgKey(ws, s.id, t)));
+        delete D.sets[m[1]];
+        if (D.defaultSetId === m[1]) D.defaultSetId = null;
+        await saveWs(ws); return sendJson(res, 200, { ok: true });
       }
     }
 
-    // image upload for a set tab
-    m = p.match(/^\/api\/sets\/([^/]+)\/(tab1|tab2)\/image$/);
-    if (m && req.method === 'POST') {
-      const s = state.sets[m[1]]; if (!s) return sendJson(res, 404, { error: 'ไม่พบชุดเมนู' });
-      const b = JSON.parse((await readBody(req)).toString() || '{}');
-      const buf = dataUrlToBuffer(b.dataUrl);
-      if (!buf) return sendJson(res, 400, { error: 'รูปต้องเป็น JPEG' });
-      if (buf.length > 1024 * 1024) return sendJson(res, 400, { error: `รูปใหญ่เกิน 1MB (${Math.round(buf.length / 1024)} KB)` });
-      s.tabs[m[2]].image = b.dataUrl;
-      s.lastModifiedAt = new Date().toISOString();
-      await saveState();
-      return sendJson(res, 200, { ok: true, sizeKB: Math.round(buf.length / 1024) });
-    }
-
-    // save draft (+schedule) ; optionally mark scheduled
     m = p.match(/^\/api\/sets\/([^/]+)\/draft$/);
-    if (m && req.method === 'POST') {
-      const s = state.sets[m[1]]; if (!s) return sendJson(res, 404, { error: 'ไม่พบชุดเมนู' });
-      const b = JSON.parse((await readBody(req)).toString() || '{}');
+    if (m && M === 'POST') {
+      const s = D.sets[m[1]]; if (!s) return sendJson(res, 404, { error: 'ไม่พบชุดเมนู' });
+      const b = await readJson(req);
       if (b.schedule) s.schedule = { startAt: String(b.schedule.startAt || ''), endAt: String(b.schedule.endAt || '') };
       s.draftSavedAt = new Date().toISOString();
-      // ถ้ามีเวลาเริ่มในอนาคต และยังไม่ live → ตั้งเป็น scheduled
       const start = s.schedule.startAt ? new Date(s.schedule.startAt).getTime() : null;
       if (s.status !== 'live' && start && start > Date.now()) s.status = 'scheduled';
       else if (s.status === 'scheduled' && (!start || start <= Date.now())) s.status = 'draft';
-      await saveState();
+      await saveWs(ws);
       return sendJson(res, 200, { ok: true, draftSavedAt: s.draftSavedAt, status: s.status });
     }
 
-    // publish set now
     m = p.match(/^\/api\/sets\/([^/]+)\/publish$/);
-    if (m && req.method === 'POST') {
-      try { const r = await publishSet(m[1]); return sendJson(res, 200, { ok: true, logs: r.logs }); }
+    if (m && M === 'POST') {
+      try { const r = await publishSet(ws, m[1]); return sendJson(res, 200, { ok: true, logs: r.logs }); }
       catch (e) { return sendJson(res, 400, { ok: false, error: e.message, logs: e.logs || [] }); }
     }
 
-    // take a set down now
     m = p.match(/^\/api\/sets\/([^/]+)\/end$/);
-    if (m && req.method === 'POST') {
-      try { await endSet(m[1]); return sendJson(res, 200, { ok: true }); }
+    if (m && M === 'POST') {
+      try { await endSet(ws, m[1]); return sendJson(res, 200, { ok: true }); }
       catch (e) { return sendJson(res, 400, { ok: false, error: e.message }); }
     }
 
-    // live from LINE (เมนูจริงบน OA)
-    if (p === '/api/live' && req.method === 'GET') {
+    if (p === '/api/live' && M === 'GET') {
       try {
-        const token = state.config.channelAccessToken;
+        const token = tokenOf(ws);
+        if (!token) return sendJson(res, 400, { ok: false, error: 'ยังไม่ได้ใส่ Channel Access Token' });
         const list = await lineApi('GET', 'https://api.line.me/v2/bot/richmenu/list', { token });
         let defaultId = null;
-        try { const d = await lineApi('GET', 'https://api.line.me/v2/bot/user/all/richmenu', { token }); defaultId = d.richMenuId; }
-        catch {}
+        try { defaultId = (await lineApi('GET', 'https://api.line.me/v2/bot/user/all/richmenu', { token })).richMenuId; } catch {}
         let aliases = [];
-        try { const a = await lineApi('GET', 'https://api.line.me/v2/bot/richmenu/alias/list', { token }); aliases = a.aliases || []; }
-        catch {}
+        try { aliases = (await lineApi('GET', 'https://api.line.me/v2/bot/richmenu/alias/list', { token })).aliases || []; } catch {}
         return sendJson(res, 200, { ok: true, richmenus: list.richmenus || [], defaultId, aliases });
       } catch (e) { return sendJson(res, 400, { ok: false, error: e.message }); }
     }
-    // proxy image of a live rich menu
-    m = p.match(/^\/api\/live-image\/([^/]+)$/);
-    if (m && req.method === 'GET') {
+    m = p.match(/^\/api\/live-image\/([A-Za-z0-9-]+)$/);
+    if (m && M === 'GET') {
       try {
-        const token = state.config.channelAccessToken;
-        const r = await fetch(`https://api-data.line.me/v2/bot/richmenu/${m[1]}/content`, { headers: { Authorization: `Bearer ${token}` } });
+        const r = await fetch(`https://api-data.line.me/v2/bot/richmenu/${m[1]}/content`, { headers: { Authorization: `Bearer ${tokenOf(ws)}` } });
         if (!r.ok) { res.writeHead(404); return res.end('no image'); }
         const buf = Buffer.from(await r.arrayBuffer());
-        res.writeHead(200, { 'Content-Type': r.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'no-cache' });
+        res.writeHead(200, { 'Content-Type': r.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'private, max-age=600' });
         return res.end(buf);
       } catch { res.writeHead(404); return res.end('no image'); }
     }
 
-    // stats: click counts by tag (จาก Supabase หรือ local)
-    if (p === '/api/stats' && req.method === 'GET') {
+    if (p === '/api/stats' && M === 'GET') {
       try {
-        if (USE_SUPA) {
-          const rows = await sbReq('GET', 'click_events?select=button_tag,user_id');
-          const agg = {}; const uniq = {};
-          for (const r of rows || []) {
-            agg[r.button_tag] = (agg[r.button_tag] || 0) + 1;
-            (uniq[r.button_tag] = uniq[r.button_tag] || new Set()).add(r.user_id);
-          }
-          const out = Object.keys(agg).map((k) => ({ tag: k, clicks: agg[k], unique: uniq[k].size }));
-          return sendJson(res, 200, { ok: true, stats: out, total: (rows || []).length });
-        } else {
-          const agg = {}; const uniq = {};
-          for (const r of state.clicks) { agg[r.button_tag] = (agg[r.button_tag] || 0) + 1; (uniq[r.button_tag] = uniq[r.button_tag] || new Set()).add(r.user_id); }
-          const out = Object.keys(agg).map((k) => ({ tag: k, clicks: agg[k], unique: uniq[k].size }));
-          return sendJson(res, 200, { ok: true, stats: out, total: state.clicks.length });
-        }
+        const rows = await store.clicks(ws.id);
+        const agg = {}; const uniq = {};
+        for (const r of rows) { agg[r.button_tag] = (agg[r.button_tag] || 0) + 1; (uniq[r.button_tag] = uniq[r.button_tag] || new Set()).add(r.user_id); }
+        return sendJson(res, 200, { ok: true, total: rows.length, stats: Object.keys(agg).map((k) => ({ tag: k, clicks: agg[k], unique: uniq[k].size })) });
       } catch (e) { return sendJson(res, 400, { ok: false, error: e.message }); }
     }
 
-    // reset everything on channel
-    if (p === '/api/reset-richmenus' && req.method === 'POST') {
+    if (p === '/api/reset-richmenus' && M === 'POST') {
       const logs = [];
       try {
-        const token = state.config.channelAccessToken;
+        const token = tokenOf(ws);
         const a = await lineApi('GET', 'https://api.line.me/v2/bot/richmenu/alias/list', { token }).catch(() => ({ aliases: [] }));
         for (const al of a.aliases || []) { await lineApi('DELETE', `https://api.line.me/v2/bot/richmenu/alias/${al.richMenuAliasId}`, { token }).catch(() => {}); logs.push(`ลบ alias ${al.richMenuAliasId}`); }
         const d = await lineApi('GET', 'https://api.line.me/v2/bot/richmenu/list', { token });
         for (const menu of d.richmenus || []) { await lineApi('DELETE', `https://api.line.me/v2/bot/richmenu/${menu.richMenuId}`, { token }).catch(() => {}); logs.push(`ลบ ${menu.richMenuId}`); }
-        for (const s of Object.values(state.sets)) { if (s.status === 'live') { s.status = 'ended'; s.published = null; } }
-        state.defaultSetId = null; await saveState();
+        for (const s of Object.values(D.sets)) if (s.status === 'live') { s.status = 'ended'; s.published = null; }
+        D.defaultSetId = null; await saveWs(ws);
         return sendJson(res, 200, { ok: true, logs });
       } catch (e) { return sendJson(res, 400, { ok: false, error: e.message, logs }); }
     }
 
-    res.writeHead(404); res.end('Not found');
-  } catch (e) { sendJson(res, 500, { error: e.message }); }
+    sendJson(res, 404, { error: 'Not found' });
+  } catch (e) {
+    console.error(e);
+    sendJson(res, 500, { error: e.message });
+  }
 });
 
-loadState().then(() => {
-  server.listen(PORT, () => console.log(`✅ Rich Menu Manager v2 running on :${PORT} (storage: ${USE_SUPA ? 'Supabase' : 'local'})`));
-});
+(async () => {
+  try {
+    if (USE_SUPA) await ensureBucket();
+    const rows = await store.loadAll();
+    for (const r of rows) { r.data = normData(r.data); WS.set(r.id, r); }
+    console.log(`โหลด ${WS.size} workspace (storage: ${USE_SUPA ? 'Supabase' : 'local'})`);
+  } catch (e) {
+    console.error('❌ โหลดข้อมูลไม่สำเร็จ:', e.message);
+  }
+  server.listen(PORT, () => console.log(`✅ LINE Richmenu Setting running on :${PORT}`));
+})();
