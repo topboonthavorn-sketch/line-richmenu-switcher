@@ -3,833 +3,547 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rich Menu Switcher — TOP TEST 3</title>
+<title>LINE Rich Menu — บุญถาวร</title>
 <style>
-  :root {
-    --primary: #06C755; --primary-dark: #05a648; --bg: #f4f6f8; --card: #fff;
-    --border: #e1e5ea; --text: #222; --muted: #777; --danger: #e5484d;
-    --c-switch: #06C755; --c-uri: #0b57d0; --c-msg: #ff9800; --c-none: #9aa5af;
+  :root{
+    --red:#c8102e; --red-dk:#a00c24; --maroon:#7a1623; --ink:#1f2328; --muted:#6b7280;
+    --line:#e5e7eb; --bg:#f3f4f6; --card:#fff; --ok:#15803d; --okbg:#e7f6ec;
+    --warn:#b45309; --warnbg:#fff4e0; --chip:#eef1f4;
+    --c-switch:#06C755; --c-uri:#2563eb; --c-msg:#f59e0b; --c-none:#9ca3af;
+    --r:10px;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', 'Noto Sans Thai', sans-serif; background: var(--bg); color: var(--text); }
-  .container { max-width: 1150px; margin: 0 auto; padding: 24px 16px 80px; }
-  header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-  header .logo { width: 44px; height: 44px; background: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 20px; }
-  header h1 { font-size: 20px; } header p { color: var(--muted); font-size: 13px; }
-  .page-nav { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
-  .page-nav button { border: none; background: none; padding: 12px 26px; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-family: inherit; }
-  .page-nav button.active { color: var(--primary-dark); border-bottom-color: var(--primary); }
-  .page { display: none; } .page.active { display: block; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
-  .card h2 { font-size: 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-  .step-num { background: var(--primary); color: #fff; min-width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
-  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
-  input[type=text], input[type=password], input[type=number], input[type=datetime-local], select, textarea {
-    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: #fff;
-  }
-  input:disabled { background: #f0f2f4; color: #99a; }
-  .row { display: flex; gap: 12px; flex-wrap: wrap; } .row > div { flex: 1; min-width: 200px; }
-  button { padding: 9px 18px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-family: inherit; }
-  .btn-primary { background: var(--primary); color: #fff; font-weight: 600; } .btn-primary:hover { background: var(--primary-dark); }
-  .btn-dark { background: #1c1e21; color: #fff; font-weight: 600; }
-  .btn-outline { background: #fff; border: 1px solid var(--border); }
-  .btn-danger { background: #fff; border: 1px solid var(--danger); color: var(--danger); }
-  .btn-lg { padding: 13px 28px; font-size: 16px; }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  .badge { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: #eef2f5; color: var(--muted); }
-  .badge.ok { background: #e3f9ec; color: #0a8f43; }
-  .badge.err { background: #fdebec; color: var(--danger); }
-  .badge.warn { background: #fff4e0; color: #a36a00; }
-  .tabs-nav { display: flex; gap: 8px; margin-bottom: 16px; }
-  .tabs-nav button { border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 10px 22px; font-weight: 600; }
-  .tabs-nav button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-  .editor-grid { display: grid; grid-template-columns: 1fr 330px; gap: 20px; }
-  @media (max-width: 880px) { .editor-grid { grid-template-columns: 1fr; } }
-  .canvas-wrap { position: relative; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 50% / 24px 24px; }
-  #menuCanvas { display: block; width: 100%; }
-  .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; margin-top: 6px; }
-  .tpl { border: 2px solid var(--border); border-radius: 10px; padding: 7px; cursor: pointer; text-align: center; background: #fff; }
-  .tpl:hover { border-color: #b9e8cd; }
-  .tpl.active { border-color: var(--primary); background: #f2fcf6; }
-  .tpl svg { width: 100%; height: auto; display: block; }
-  .tpl .tpl-name { font-size: 11.5px; color: var(--muted); margin-top: 5px; line-height: 1.3; }
-  .area-panel { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: #fafbfc; align-self: start; }
-  .area-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
-  .area-chip { padding: 5px 12px; border-radius: 20px; border: 2px solid var(--border); background: #fff; cursor: pointer; font-size: 13px; font-weight: 600; }
-  .area-chip.t-switch { border-color: var(--c-switch); color: #067a38; }
-  .area-chip.t-uri { border-color: var(--c-uri); color: var(--c-uri); }
-  .area-chip.t-message { border-color: var(--c-msg); color: #b26a00; }
-  .area-chip.t-none { border-color: var(--c-none); color: var(--c-none); border-style: dashed; }
-  .area-chip.active { background: #1c1e21; color: #fff; border-color: #1c1e21; }
-  .coords { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .coords .cfield span { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 3px; }
-  .coords input { padding: 6px 8px; font-size: 13px; }
-  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
-  .log-box { background: #101418; color: #b9f6ca; font-family: Consolas, monospace; font-size: 13px; border-radius: 10px; padding: 14px; max-height: 260px; overflow-y: auto; white-space: pre-wrap; display: none; }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 14px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 99; }
-  .toast.show { opacity: 1; }
-  .upload-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 18px; text-align: center; color: var(--muted); cursor: pointer; font-size: 14px; }
-  .upload-zone:hover { border-color: var(--primary); color: var(--primary); }
-  .status-line { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
-  .draft-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #fafbfc; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI','Noto Sans Thai',sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  a{color:inherit}
+  /* top bar */
+  .topbar{background:#fff;border-bottom:1px solid var(--line);height:56px;display:flex;align-items:center;gap:22px;padding:0 24px;position:sticky;top:0;z-index:30}
+  .brand{font-weight:800;color:var(--red);font-size:20px;letter-spacing:.3px}
+  .topnav{display:flex;gap:20px;color:#444;font-size:14px}
+  .topnav b{color:var(--red)}
+  .container{max-width:1280px;margin:0 auto;padding:22px 24px 80px}
+  .crumb{color:var(--muted);font-size:13px;margin-bottom:4px}
+  .crumb b{color:var(--ink)}
+  .h1{font-size:26px;font-weight:800}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .spacer{flex:1}
+  /* buttons */
+  button,.btn{font-family:inherit;font-size:14px;border-radius:8px;cursor:pointer;border:1px solid var(--line);background:#fff;padding:9px 14px;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{background:#f7f8f9}
+  .btn-red{background:var(--red);color:#fff;border-color:var(--red);font-weight:600}
+  .btn-red:hover{background:var(--red-dk)}
+  .btn-dk{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+  .btn-ghost{background:#fff}
+  .btn-danger{color:var(--red);border-color:#f1c2c9;background:#fff}
+  .btn-sm{padding:5px 10px;font-size:12.5px}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  input,select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%;background:#fff}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:0 0 5px}
+  /* KPI cards */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
+  @media(max-width:880px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--red);border-radius:var(--r);padding:14px 16px}
+  .kpi .l{font-size:12.5px;color:var(--muted)}
+  .kpi .v{font-size:26px;font-weight:800;margin-top:3px}
+  .kpi .s{font-size:12px;color:var(--muted);margin-top:2px}
+  /* table */
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  table{width:100%;border-collapse:collapse}
+  thead th{text-align:left;font-size:12px;letter-spacing:.3px;color:var(--muted);text-transform:uppercase;padding:12px 14px;background:#fafbfc;border-bottom:1px solid var(--line)}
+  tbody td{padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fafbfc;cursor:pointer}
+  .thumbs{display:flex;gap:4px;align-items:center}
+  .thumb{width:72px;height:49px;border-radius:5px;border:1px solid var(--line);object-fit:cover;background:#f0f1f3}
+  .thumb.ph{display:flex;align-items:center;justify-content:center;color:#b9c0c8}
+  .mini{width:42px;height:28px;border-radius:4px;border:1px solid var(--line);background:#eef1f4}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:3px 10px;border-radius:20px;background:var(--chip);color:#555;font-weight:600;white-space:nowrap}
+  .pill.ok{background:var(--okbg);color:var(--ok)}
+  .pill.warn{background:var(--warnbg);color:var(--warn)}
+  .pill.gray{background:#eef1f4;color:#6b7280}
+  .pill.dot::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+  .setname{font-weight:700}
+  .setslug{font-size:12px;color:var(--muted);font-family:monospace}
+  .empty{padding:48px;text-align:center;color:var(--muted)}
+  /* modal */
+  .mask{position:fixed;inset:0;background:rgba(17,20,24,.45);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:60px 16px;overflow:auto}
+  .mask.on{display:flex}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:720px;padding:22px 24px}
+  .modal h3{font-size:18px;font-weight:800;margin-bottom:16px;display:flex;align-items:center}
+  .modal .x{margin-left:auto;cursor:pointer;color:#9ca3af;font-size:22px;line-height:1}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:none;border-radius:0;background:#fff;padding:8px 18px;font-weight:600;color:#555}
+  .seg button.on{background:var(--ink);color:#fff}
+  .seg button:disabled{color:#c0c4ca}
+  .note{background:#eaf2fe;border:1px solid #cfe0fb;color:#1e40af;border-radius:8px;padding:9px 12px;font-size:12.5px;margin:12px 0}
+  .lay-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;margin-top:6px}
+  .lay{border:2px solid var(--line);border-radius:10px;padding:7px;cursor:pointer;text-align:center;background:#fff}
+  .lay.on{border-color:var(--red);background:#fdeef0}
+  .lay svg{width:100%;display:block}
+  .lay .n{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.3}
+  /* detail */
+  .edgrid{display:grid;grid-template-columns:1fr 340px;gap:18px;margin-top:16px}
+  @media(max-width:980px){.edgrid{grid-template-columns:1fr}}
+  .canvas-wrap{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:repeating-conic-gradient(#f0f0f0 0% 25%,#fff 0% 50%) 50%/22px 22px}
+  #cv{display:block;width:100%}
+  .tabsbar{display:flex;gap:8px;margin-bottom:12px}
+  .tabsbar button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 20px;font-weight:700}
+  .tabsbar button.on{background:var(--red);color:#fff;border-color:var(--red)}
+  .side{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fafbfc;align-self:start}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
+  .chip{padding:5px 11px;border-radius:20px;border:2px solid var(--line);background:#fff;cursor:pointer;font-size:13px;font-weight:700}
+  .chip.t-switch{border-color:var(--c-switch);color:#067a38}.chip.t-uri{border-color:var(--c-uri);color:var(--c-uri)}
+  .chip.t-message{border-color:var(--c-msg);color:#b26a00}.chip.t-none{border-color:var(--c-none);color:#6b7280;border-style:dashed}
+  .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .coords{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .coords .f span{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}
+  .coords input{padding:6px 8px;font-size:13px}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:8px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:4px}
+  .logbox{background:#0f1419;color:#b9f6ca;font-family:Consolas,monospace;font-size:12.5px;border-radius:10px;padding:13px;max-height:230px;overflow:auto;white-space:pre-wrap;display:none;margin-top:12px}
+  .upload{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--muted);cursor:pointer}
+  .upload:hover{border-color:var(--red);color:var(--red)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .field{margin-bottom:12px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1f2328;color:#fff;padding:12px 22px;border-radius:30px;opacity:0;transition:.3s;pointer-events:none;z-index:99}
+  .toast.on{opacity:1}
+  .banner{background:var(--warnbg);border:1px solid #f2d59a;color:var(--warn);border-radius:8px;padding:9px 13px;font-size:12.5px;margin-bottom:14px}
+  .detail-head{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px}
+  @media(max-width:980px){.detail-head{grid-template-columns:repeat(2,1fr)}}
+  .hide{display:none!important}
 </style>
 </head>
 <body>
+<div class="topbar">
+  <span class="brand">บุญถาวร</span>
+  <div class="topnav"><span>Dashboard</span><span>Customer</span><span>Transactions</span><span>Products</span><b>Marketing</b><span>Setting</span></div>
+  <div class="spacer"></div>
+  <span id="botBadge" class="pill gray">ยังไม่เชื่อมต่อ</span>
+</div>
+
 <div class="container">
-  <header>
-    <div class="logo">RM</div>
-    <div>
-      <h1>Rich Menu Switcher <span class="badge" id="botBadge">ยังไม่เชื่อมต่อ</span></h1>
-      <p>ระบบจัดการ Rich Menu แบบสลับแท็บ — LINE OA: TOP TEST 3</p>
-    </div>
-  </header>
 
-  <div class="page-nav">
-    <button id="navDesign" class="active" onclick="switchPage('design')">🎨 ออกแบบ &amp; เผยแพร่</button>
-    <button id="navConfig" onclick="switchPage('config')">⚙️ ตั้งค่าระบบ</button>
-  </div>
-
-  <!-- ================= PAGE: CONFIG ================= -->
-  <div class="page" id="pageConfig">
-    <div class="card">
-      <h2>เชื่อมต่อ LINE Channel</h2>
-      <div class="row">
-        <div>
-          <label>Channel Access Token (long-lived) <span id="tokenHint" class="badge"></span></label>
-          <input type="password" id="cfgToken" placeholder="วาง token จาก LINE Developers > Messaging API">
-        </div>
-        <div>
-          <label>Channel Secret (ไม่บังคับ — ระบบนี้ไม่ใช้ webhook)</label>
-          <input type="password" id="cfgSecret" placeholder="Channel secret">
-        </div>
-        <div style="max-width:180px">
-          <label>ข้อความแถบล่าง (Chat bar)</label>
-          <input type="text" id="cfgChatBar" maxlength="14" placeholder="เมนู">
-        </div>
+  <!-- ================= LIST VIEW ================= -->
+  <div id="view-list">
+    <div class="row">
+      <div>
+        <div class="crumb">Home / Marketing / <b>Rich Menu</b></div>
+        <div class="h1">LINE Rich Menu</div>
+        <div class="sub">เมนูด้านล่างหน้าแชท LINE</div>
       </div>
-      <div class="status-line">
-        <button class="btn-primary" onclick="saveConfig()">บันทึกการตั้งค่า</button>
-        <button class="btn-outline" onclick="testConnection()">ทดสอบการเชื่อมต่อ</button>
-        <span id="connResult"></span>
-      </div>
-      <p class="hint">หา token ได้ที่ <b>developers.line.biz</b> → Provider → Channel "TOP TEST 3" → แท็บ Messaging API → Channel access token (กด Issue)</p>
-      <p class="hint">💡 Free tier: server จะถูกรีเซ็ตเมื่อไม่มีคนใช้ — งานออกแบบระบบจะกู้คืนจากเบราว์เซอร์ให้อัตโนมัติ แต่ <b>token แนะนำตั้งเป็น Environment Variable ชื่อ CHANNEL_ACCESS_TOKEN ใน Render Dashboard</b> จะได้ไม่ต้องใส่ใหม่ทุกครั้ง</p>
+      <div class="spacer"></div>
+      <button class="btn" onclick="openLive()">🧾 เมนูจริงบน OA</button>
+      <button class="btn" onclick="openConfig()">⚙️ ตั้งค่าระบบ</button>
+      <button class="btn-red btn" onclick="openCreate()">＋ สร้างชุดใหม่</button>
     </div>
-    <div class="card">
-      <h2>เครื่องมือ Channel</h2>
-      <div class="status-line" style="margin-top:0">
-        <button class="btn-outline" onclick="listMenus()">ดู Rich Menu บน channel</button>
-        <button class="btn-danger" onclick="resetMenus()">ลบ Rich Menu ทั้งหมด</button>
-      </div>
-      <div class="log-box" id="logBoxConfig" style="margin-top:14px"></div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="panel">
+      <table>
+        <thead><tr>
+          <th>ภาพ</th><th>ชุดเมนู</th><th>แท็บ</th><th>ขนาด</th><th>ช่วงเวลา</th><th>สถานะ</th><th>เมนูเริ่มต้น</th><th>สร้างเมื่อ</th><th></th>
+        </tr></thead>
+        <tbody id="setRows"></tbody>
+      </table>
+      <div class="empty hide" id="emptyList">ยังไม่มีชุดเมนู — กด “＋ สร้างชุดใหม่” ที่มุมขวาบน</div>
     </div>
   </div>
 
-  <!-- ================= PAGE: DESIGN ================= -->
-  <div class="page active" id="pageDesign">
-
-    <div class="card">
-      <h2><span class="step-num">1</span> เลือกวิธีออกแบบปุ่ม <span class="badge" id="tplBadge"></span></h2>
-      <div class="tabs-nav">
-        <button id="navTab1" class="active" onclick="switchTab('tab1')">แถบ 1</button>
-        <button id="navTab2" onclick="switchTab('tab2')">แถบ 2</button>
+  <!-- ================= DETAIL VIEW ================= -->
+  <div id="view-detail" class="hide">
+    <div class="row">
+      <div>
+        <div class="crumb"><a href="#" onclick="goList();return false">Rich Menu</a> / <b id="dName">—</b></div>
+        <div class="h1" id="dTitle">—</div>
       </div>
-      <div class="tpl-grid" id="tplGrid"></div>
+      <div class="spacer"></div>
+      <span id="dStatus" class="pill gray dot">draft</span>
+      <button class="btn" onclick="showJson()">{ } JSON</button>
+      <button class="btn-dk btn" onclick="saveDraft()">💾 บันทึกแบบร่าง</button>
+      <button class="btn-red btn" onclick="publishNow()">🚀 Deploy ทั้งชุด</button>
+    </div>
+
+    <div id="dBanner"></div>
+
+    <div class="detail-head">
+      <div class="field"><label>ชื่อชุด</label><input id="fName" onchange="metaChange()"></div>
+      <div class="field"><label>แถบล่าง (14 ตัว)</label><input id="fChatbar" maxlength="14" onchange="metaChange()"></div>
+      <div class="field"><label>เริ่มแสดง</label><input id="fStart" type="datetime-local" onchange="metaChange()"></div>
+      <div class="field"><label>เอาลง</label><input id="fEnd" type="datetime-local" onchange="metaChange()"></div>
+      <div class="field"><label>ช่วงเวลา</label><div id="fRange" style="padding-top:8px;font-size:12.5px;color:var(--muted)">—</div></div>
+      <div class="field"><label>เมนูเริ่มต้น</label><div style="padding-top:6px"><span id="fDefault" class="pill gray">—</span></div></div>
+    </div>
+
+    <div class="tabsbar">
+      <button id="nt1" class="on" onclick="selTab('tab1')">1 · แถบ 1</button>
+      <button id="nt2" onclick="selTab('tab2')">2 · แถบ 2</button>
+    </div>
+
+    <div class="field">
+      <label>รูปของแท็บนี้ (2500×1686 — ระบบย่อ/ครอป + บีบอัด &lt;1MB ให้)</label>
+      <div class="upload" id="uz" onclick="document.getElementById('fi').click()">📷 คลิกเลือกรูป หรือลากรูปมาวาง</div>
+      <input id="fi" type="file" accept="image/png,image/jpeg" class="hide" onchange="upImg(this.files[0])">
+    </div>
+
+    <div class="field">
+      <label>Layout / Template ปุ่ม</label>
+      <div class="lay-grid" id="layGrid"></div>
       <div class="legend">
-        <span><i style="background:var(--c-switch)"></i> สลับแท็บ</span>
-        <span><i style="background:var(--c-uri)"></i> ลิงก์</span>
-        <span><i style="background:var(--c-msg)"></i> ข้อความ</span>
-        <span><i style="background:#e6e9ec; border:1px dashed var(--c-none)"></i> ไม่กำหนด (รูปเฉยๆ)</span>
+        <span><i style="background:var(--c-switch)"></i>สลับแท็บ</span>
+        <span><i style="background:var(--c-uri)"></i>ลิงก์</span>
+        <span><i style="background:var(--c-msg)"></i>ข้อความ</span>
+        <span><i style="background:#e6e9ec;border:1px dashed var(--c-none)"></i>ไม่กำหนด</span>
       </div>
     </div>
 
-    <div class="card">
-      <h2><span class="step-num">2</span> ใส่รูป Rich Menu</h2>
-      <div class="row" style="margin-bottom:10px">
-        <div style="max-width:260px">
-          <label>ชื่อแถบ (สำหรับ admin)</label>
-          <input type="text" id="tabName" onchange="onTabMetaChange()">
-        </div>
+    <div class="edgrid">
+      <div>
+        <div class="canvas-wrap"><canvas id="cv" width="1000" height="674"></canvas></div>
+        <div class="hint" id="cvHint"></div>
       </div>
-      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-        📷 คลิกเพื่อเลือกรูป หรือลากรูปมาวางที่นี่ (แนะนำ 2500×1686 px — ระบบย่อ/ครอป + บีบอัดไม่เกิน 1MB ให้อัตโนมัติ)
-      </div>
-      <input type="file" id="fileInput" accept="image/png,image/jpeg" style="display:none" onchange="uploadImage(this.files[0])">
-    </div>
-
-    <div class="card">
-      <h2><span class="step-num">3</span> แก้ไขปุ่ม <span class="badge" id="modeBadge"></span></h2>
-      <div class="editor-grid">
-        <div>
-          <div class="canvas-wrap"><canvas id="menuCanvas" width="1000" height="674"></canvas></div>
-          <p class="hint" id="canvasHint"></p>
-        </div>
-        <div class="area-panel">
-          <b style="font-size:14px">ปุ่มทั้งหมด</b>
-          <div class="area-list" id="areaList"></div>
-          <div id="areaEditor" style="display:none">
-            <label style="margin-top:0">ตำแหน่งบนรูป (หน่วย px เต็ม 2500×1686) <span id="lockNote" style="color:#a36a00"></span></label>
-            <div class="coords">
-              <div class="cfield"><span>◀ X — ระยะจากขอบซ้าย</span><input type="number" id="aX" onchange="onCoordChange()"></div>
-              <div class="cfield"><span>▲ Y — ระยะจากขอบบน</span><input type="number" id="aY" onchange="onCoordChange()"></div>
-              <div class="cfield"><span>↔ กว้าง</span><input type="number" id="aW" onchange="onCoordChange()"></div>
-              <div class="cfield"><span>↕ สูง</span><input type="number" id="aH" onchange="onCoordChange()"></div>
-            </div>
-            <label>การทำงานของปุ่ม (Action)</label>
-            <select id="aType" onchange="onActionTypeChange()">
+      <div class="side">
+        <b>ปุ่มทั้งหมด <span id="areaCount" class="pill gray" style="font-size:11px">0</span></b>
+        <div class="chips" id="chips"></div>
+        <div id="areaEditor" class="hide">
+          <label>ตำแหน่งบนรูป (px เต็ม 2500×1686) <span id="lockNote" style="color:#b45309"></span></label>
+          <div class="coords">
+            <div class="f"><span>◀ X ขอบซ้าย</span><input type="number" id="aX" onchange="coordChange()"></div>
+            <div class="f"><span>▲ Y ขอบบน</span><input type="number" id="aY" onchange="coordChange()"></div>
+            <div class="f"><span>↔ กว้าง</span><input type="number" id="aW" onchange="coordChange()"></div>
+            <div class="f"><span>↕ สูง</span><input type="number" id="aH" onchange="coordChange()"></div>
+          </div>
+          <div class="field" style="margin-top:10px"><label>การทำงานของปุ่ม (Action)</label>
+            <select id="aType" onchange="actionTypeChange()">
               <option value="switch">🔁 สลับแท็บ</option>
               <option value="uri">🔗 เปิดลิงก์ (URL)</option>
               <option value="message">💬 ส่งข้อความ</option>
               <option value="none">🖼️ ไม่กำหนด (รูปเฉยๆ)</option>
             </select>
-            <div id="aValueWrap">
-              <label id="aValueLabel">ค่า</label>
-              <select id="aSwitchTarget" onchange="onValueChange()">
-                <option value="tab1">ไปแถบ 1</option>
-                <option value="tab2">ไปแถบ 2</option>
-              </select>
-              <input type="text" id="aValue" placeholder="https://..." onchange="onValueChange()" style="display:none">
-            </div>
-            <div style="margin-top:12px; display:flex; gap:8px">
-              <button class="btn-danger" id="delAreaBtn" onclick="deleteArea()">ลบปุ่มนี้</button>
-            </div>
           </div>
-          <p class="hint" id="noAreaHint">ยังไม่ได้เลือกปุ่ม — คลิกปุ่มบนรูป</p>
+          <div class="field" id="valWrap">
+            <label id="valLabel">ค่า</label>
+            <select id="aSwitch" onchange="valChange()"><option value="tab1">ไปแถบ 1</option><option value="tab2">ไปแถบ 2</option></select>
+            <input id="aVal" class="hide" onchange="valChange()" placeholder="https://...">
+          </div>
+          <button class="btn-danger btn btn-sm" id="delBtn" onclick="delArea()">ลบปุ่มนี้</button>
         </div>
+        <div class="hint" id="noArea">ยังไม่ได้เลือกปุ่ม — คลิกปุ่มบนรูป</div>
       </div>
     </div>
-
-    <div class="card">
-      <h2><span class="step-num">4</span> Draft, ตั้งเวลา และเผยแพร่</h2>
-      <div class="draft-bar">
-        <b style="font-size:14px">💾 Draft</b>
-        <span id="draftStatus" class="badge warn">ยังไม่ได้บันทึก</span>
-        <span style="flex:1"></span>
-        <button class="btn-dark" onclick="saveDraft()">บันทึก Draft</button>
-      </div>
-      <div class="row">
-        <div>
-          <label>📅 Campaign เริ่มแสดง (บันทึกไว้เป็นแผน)</label>
-          <input type="datetime-local" id="schStart" onchange="markDirty()">
-        </div>
-        <div>
-          <label>⏰ Campaign สิ้นสุด</label>
-          <input type="datetime-local" id="schEnd" onchange="markDirty()">
-        </div>
-      </div>
-      <p class="hint">การเผยแพร่เป็นแบบ manual: ถึงเวลาเริ่ม campaign แล้วกด "เผยแพร่" เอง (LINE API ไม่มีระบบตั้งเวลาในตัว — ระบบจะเตือนถ้ายังไม่ถึงเวลาที่ตั้งไว้)</p>
-      <div class="status-line">
-        <button class="btn-primary btn-lg" id="publishBtn" onclick="publish()">🚀 เผยแพร่ Rich Menu</button>
-        <span id="pubStatus"></span>
-      </div>
-      <div class="log-box" id="logBox" style="margin-top:14px"></div>
-    </div>
-
+    <div class="logbox" id="log"></div>
   </div>
 </div>
+
+<!-- ======= create modal ======= -->
+<div class="mask" id="mCreate"><div class="modal">
+  <h3>สร้างชุด Rich menu ใหม่ <span class="x" onclick="closeM('mCreate')">×</span></h3>
+  <div class="row" style="align-items:flex-end;gap:16px">
+    <div style="flex:1"><label>ชื่อชุดเมนู</label><input id="cName" value="ชุดเมนูใหม่"></div>
+    <div><label>ชุดนี้มีกี่แท็บ</label>
+      <div class="seg">
+        <button id="tc1" disabled title="เร็วๆนี้">1 แท็บ</button>
+        <button id="tc2" class="on" onclick="setTabCount(2)">2 แท็บ</button>
+        <button id="tc3" disabled title="เร็วๆนี้">3 แท็บ</button>
+      </div>
+    </div>
+  </div>
+  <div class="note" id="cNote"></div>
+  <label>เลย์เอาต์</label>
+  <div class="lay-grid" id="cLay"></div>
+  <div class="row" style="margin-top:18px"><div class="spacer"></div>
+    <button class="btn" onclick="closeM('mCreate')">ยกเลิก</button>
+    <button class="btn-red btn" onclick="doCreate()">สร้างชุดนี้</button>
+  </div>
+</div></div>
+
+<!-- ======= config modal ======= -->
+<div class="mask" id="mConfig"><div class="modal" style="max-width:600px">
+  <h3>ตั้งค่าระบบ (เชื่อม LINE) <span class="x" onclick="closeM('mConfig')">×</span></h3>
+  <div class="field"><label>Channel Access Token <span id="tokHint" class="pill gray" style="font-size:11px"></span></label><input id="cfgTok" type="password" placeholder="วาง token จาก LINE Developers"></div>
+  <div class="field"><label>Channel Secret (สำหรับ tracking/webhook)</label><input id="cfgSec" type="password" placeholder="channel secret"></div>
+  <div class="field"><label>ข้อความแถบล่าง (default)</label><input id="cfgBar" maxlength="14" placeholder="เมนู"></div>
+  <div class="row"><button class="btn-red btn" onclick="saveConfig()">บันทึก</button><button class="btn" onclick="testConn()">ทดสอบการเชื่อมต่อ</button><span id="connRes"></span></div>
+  <div class="hint" id="storeHint" style="margin-top:12px"></div>
+  <div class="row" style="margin-top:10px"><button class="btn-danger btn btn-sm" onclick="resetAll()">ลบ Rich Menu ทั้งหมดบน channel</button></div>
+  <div class="logbox" id="cfgLog"></div>
+</div></div>
+
+<!-- ======= live modal ======= -->
+<div class="mask" id="mLive"><div class="modal" style="max-width:860px">
+  <h3>เมนูจริงบน OA (อ่านสดจาก LINE) <span class="x" onclick="closeM('mLive')">×</span></h3>
+  <div id="liveBody">กำลังโหลด...</div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-const MENU_W = 2500, MENU_H = 1686, TAB_H = 253;
-const MIN_SIZE = 100;
-let state = null;
-let currentTab = 'tab1';
-let selectedArea = -1;
-let images = { tab1: null, tab2: null };
-let imageDataUrls = { tab1: null, tab2: null };
-let drag = null; // {mode:'create'|'move'|'resize', ...}
-let dirty = false;
-
-// ---------------- local backup (กัน free-tier server ล้างข้อมูลตอน restart) ----------------
-function backupLocal() {
-  try {
-    localStorage.setItem('rm_backup', JSON.stringify({
-      tabs: state.tabs,
-      schedule: {
-        startAt: document.getElementById('schStart').value,
-        endAt: document.getElementById('schEnd').value,
-      },
-      images: imageDataUrls,
-      savedAt: new Date().toISOString(),
-    }));
-  } catch {}
-}
-
-async function restoreBackup(b) {
-  for (const id of ['tab1', 'tab2']) {
-    const t = b.tabs && b.tabs[id];
-    if (!t) continue;
-    await fetch(`/api/tabs/${id}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: t.name, template: t.template, areas: t.areas }),
-    });
-    if (b.images && b.images[id]) {
-      await fetch(`/api/tabs/${id}/image`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataUrl: b.images[id] }),
-      });
-    }
-  }
-  if (b.schedule) {
-    await fetch('/api/draft', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schedule: b.schedule }),
-    });
-  }
-}
+const W=2500,H=1686,TAB_H=253,MIN=100;
+let S=null, view='list', setId=null, tab='tab1', sel=-1, drag=null, dirty=false;
+let imgs={tab1:null,tab2:null};
+let createTabCount=2, createLayout=null;
 
 // ---------------- templates ----------------
-function tabBarAreas() {
-  return [
-    { x: 0, y: 0, w: MENU_W / 2, h: TAB_H, action: { type: 'switch', value: 'tab1' } },
-    { x: MENU_W / 2, y: 0, w: MENU_W / 2, h: TAB_H, action: { type: 'switch', value: 'tab2' } },
-  ];
-}
-function grid(cols, rows, x0, y0, w0, h0, action) {
-  const areas = [];
-  const w = w0 / cols, h = h0 / rows;
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++)
-    areas.push({ x: x0 + c * w, y: y0 + r * h, w, h, action: { type: action, value: action === 'uri' ? '' : '' } });
-  return areas;
-}
-const TEMPLATES = {
-  'tabbar-6':  { name: 'แท็บ + 6 ปุ่ม', make: () => [...tabBarAreas(), ...grid(3, 2, 0, TAB_H, MENU_W, MENU_H - TAB_H, 'uri')] },
-  'tabbar-8':  { name: 'แท็บ + 8 ปุ่ม (บน4 ล่าง4)', make: () => [...tabBarAreas(), ...grid(4, 2, 0, TAB_H, MENU_W, MENU_H - TAB_H, 'uri')] },
-  'tabbar-4':  { name: 'แท็บ + 4 ปุ่ม', make: () => [...tabBarAreas(), ...grid(2, 2, 0, TAB_H, MENU_W, MENU_H - TAB_H, 'uri')] },
-  'tabbar-3':  { name: 'แท็บ + 3 ปุ่ม', make: () => [...tabBarAreas(), ...grid(3, 1, 0, TAB_H, MENU_W, MENU_H - TAB_H, 'uri')] },
-  'tabbar-2':  { name: 'แท็บ + 2 ปุ่ม', make: () => [...tabBarAreas(), ...grid(2, 1, 0, TAB_H, MENU_W, MENU_H - TAB_H, 'uri')] },
-  'tabbar-1':  { name: 'แท็บ + 1 ใหญ่', make: () => [...tabBarAreas(), ...grid(1, 1, 0, TAB_H, MENU_W, MENU_H - TAB_H, 'uri')] },
-  'left-4':    { name: 'รูปใหญ่ซ้าย + 4 ปุ่มขวา', make: () => [
-      { x: 0, y: 0, w: MENU_W / 2, h: MENU_H, action: { type: 'none', value: '' } },
-      ...grid(2, 2, MENU_W / 2, 0, MENU_W / 2, MENU_H, 'uri'),
-    ] },
-  'left-6':    { name: 'รูปใหญ่ซ้าย + 6 ปุ่มขวา', make: () => [
-      { x: 0, y: 0, w: MENU_W / 2, h: MENU_H, action: { type: 'none', value: '' } },
-      ...grid(2, 3, MENU_W / 2, 0, MENU_W / 2, MENU_H, 'uri'),
-    ] },
-  'full-6':    { name: '6 ปุ่มเต็ม (ไม่มีแท็บ)', make: () => grid(3, 2, 0, 0, MENU_W, MENU_H, 'uri') },
-  'custom':    { name: '✏️ วาดเอง freestyle', make: () => [] },
+function tabBar(){return[{x:0,y:0,w:W/2,h:TAB_H,action:{type:'switch',value:'tab1'}},{x:W/2,y:0,w:W/2,h:TAB_H,action:{type:'switch',value:'tab2'}}];}
+function grid(c,r,x0,y0,w0,h0,act){const a=[],w=w0/c,h=h0/r;for(let rr=0;rr<r;rr++)for(let cc=0;cc<c;cc++)a.push({x:x0+cc*w,y:y0+rr*h,w,h,action:{type:act,value:''}});return a;}
+const TPL={
+  'tabbar-6':{n:'แท็บ + 6 ปุ่ม',two:true,make:()=>[...tabBar(),...grid(3,2,0,TAB_H,W,H-TAB_H,'uri')]},
+  'tabbar-8':{n:'แท็บ + 8 ปุ่ม (บน4 ล่าง4)',two:true,make:()=>[...tabBar(),...grid(4,2,0,TAB_H,W,H-TAB_H,'uri')]},
+  'tabbar-4':{n:'แท็บ + 4 ปุ่ม',two:true,make:()=>[...tabBar(),...grid(2,2,0,TAB_H,W,H-TAB_H,'uri')]},
+  'tabbar-3':{n:'แท็บ + 3 ปุ่ม',two:true,make:()=>[...tabBar(),...grid(3,1,0,TAB_H,W,H-TAB_H,'uri')]},
+  'left-4':{n:'รูปซ้าย + 4 ขวา',one:true,make:()=>[{x:0,y:0,w:W/2,h:H,action:{type:'none',value:''}},...grid(2,2,W/2,0,W/2,H,'uri')]},
+  'left-6':{n:'รูปซ้าย + 6 ขวา',one:true,make:()=>[{x:0,y:0,w:W/2,h:H,action:{type:'none',value:''}},...grid(2,3,W/2,0,W/2,H,'uri')]},
+  'full-6':{n:'6 ปุ่มเต็ม',one:true,make:()=>grid(3,2,0,0,W,H,'uri')},
+  'full-4':{n:'4 ปุ่ม',one:true,make:()=>grid(2,2,0,0,W,H,'uri')},
+  'full-3':{n:'3 ปุ่ม',one:true,make:()=>grid(3,1,0,0,W,H,'uri')},
+  'full-2':{n:'2 ปุ่ม',one:true,make:()=>grid(2,1,0,0,W,H,'uri')},
+  'full-1':{n:'เต็มจอ',one:true,make:()=>grid(1,1,0,0,W,H,'uri')},
+  'custom':{n:'✏️ วาดเอง',any:true,make:()=>[]},
 };
+const ACOL={switch:{s:'#06C755',f:'rgba(6,199,85,.15)'},uri:{s:'#2563eb',f:'rgba(37,99,235,.12)'},message:{s:'#f59e0b',f:'rgba(245,158,11,.13)'},none:{s:'#9ca3af',f:'rgba(156,163,175,.1)'}};
+const AICON={switch:'🔁',uri:'🔗',message:'💬',none:'🖼️'};
+function tplThumb(key){const t=TPL[key];const rects=key==='custom'?[]:t.make();const s=100/W;let svg=`<svg viewBox="0 0 100 ${Math.round(H*s)}"><rect width="100" height="${Math.round(H*s)}" fill="#eef2f5" rx="3"/>`;rects.forEach(r=>{const c=r.action.type==='switch'?'#06C755':r.action.type==='none'?'#d3d8dd':'#f3b4bc';svg+=`<rect x="${r.x*s+.8}" y="${r.y*s+.8}" width="${r.w*s-1.6}" height="${r.h*s-1.6}" fill="${c}" rx="1.5"/>`;});if(key==='custom')svg+=`<text x="50" y="40" font-size="22" text-anchor="middle" fill="#9aa5af">✏️</text>`;return svg+'</svg>';}
 
-const ACTION_COLOR = {
-  switch: { stroke: '#06C755', fill: 'rgba(6,199,85,.14)', label: '#067a38' },
-  uri:    { stroke: '#0b57d0', fill: 'rgba(11,87,208,.12)', label: '#0b57d0' },
-  message:{ stroke: '#ff9800', fill: 'rgba(255,152,0,.12)', label: '#b26a00' },
-  none:   { stroke: '#9aa5af', fill: 'rgba(154,165,175,.10)', label: '#78838d' },
-};
-const ACTION_ICON = { switch: '🔁', uri: '🔗', message: '💬', none: '🖼️' };
+// ---------------- time helpers (เก็บเป็น ISO/UTC — server เป็น UTC) ----------------
+function toIso(v){if(!v)return'';const d=new Date(v);return isNaN(d)?'':d.toISOString();}
+function toLocalInput(iso){if(!iso)return'';const d=new Date(iso);if(isNaN(d))return'';const p=n=>String(n).padStart(2,'0');return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
+function schedFromInputs(){return{startAt:toIso(document.getElementById('fStart').value),endAt:toIso(document.getElementById('fEnd').value)};}
 
-function isCustom() { return state.tabs[currentTab].template === 'custom'; }
+// ---------------- api ----------------
+async function api(path,opt){const r=await fetch(path,opt);return r.json();}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
 
-function tplThumb(key) {
-  const t = TEMPLATES[key];
-  let rects = key === 'custom' ? [] : t.make();
-  const s = 100 / MENU_W;
-  let svg = `<svg viewBox="0 0 100 ${Math.round(MENU_H * s)}">`;
-  svg += `<rect width="100" height="${Math.round(MENU_H * s)}" fill="#eef2f5" rx="3"/>`;
-  rects.forEach((r) => {
-    const c = r.action.type === 'switch' ? '#06C755' : r.action.type === 'none' ? '#d3d8dd' : '#a9c8ef';
-    svg += `<rect x="${r.x*s+0.8}" y="${r.y*s+0.8}" width="${r.w*s-1.6}" height="${r.h*s-1.6}" fill="${c}" rx="1.5"/>`;
-  });
-  if (key === 'custom') svg += `<text x="50" y="40" font-size="24" text-anchor="middle" fill="#9aa5af">✏️</text>`;
-  svg += '</svg>';
-  return svg;
+async function refresh(){
+  S=await api('/api/state');
+  document.getElementById('botBadge').className='pill '+(S.config.tokenSet?'ok':'gray');
+  document.getElementById('botBadge').textContent=S.config.tokenSet?'เชื่อมต่อแล้ว':'ยังไม่เชื่อมต่อ';
+  if(view==='list')renderList();
 }
 
-function renderTplGrid() {
-  const el = document.getElementById('tplGrid');
-  el.innerHTML = '';
-  Object.keys(TEMPLATES).forEach((key) => {
-    const div = document.createElement('div');
-    div.className = 'tpl' + (state.tabs[currentTab].template === key ? ' active' : '');
-    div.innerHTML = tplThumb(key) + `<div class="tpl-name">${TEMPLATES[key].name}</div>`;
-    div.onclick = () => applyTemplate(key);
-    el.appendChild(div);
-  });
-  document.getElementById('tplBadge').textContent = TEMPLATES[state.tabs[currentTab].template]?.name || '';
-  const custom = isCustom();
-  document.getElementById('modeBadge').textContent = custom ? 'โหมดวาดเอง — ลากปุ่มย้าย/ย่อขยายได้' : 'โหมด template — ตำแหน่งล็อกอัตโนมัติ';
-  document.getElementById('canvasHint').textContent = custom
-    ? 'ลากบนพื้นที่ว่างเพื่อสร้างปุ่มใหม่ • ลากตัวปุ่มเพื่อย้าย • ลากจุดมุมเพื่อย่อ/ขยาย • คลิกปุ่มเพื่อแก้ action'
-    : 'คลิกปุ่มบนรูปเพื่อแก้ action — ตำแหน่งจัดให้อัตโนมัติตาม template (อยากขยับเองให้เลือก "วาดเอง freestyle")';
+// ---------------- list ----------------
+function setList(){return Object.values(S.sets).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));}
+function fmtDate(d){if(!d)return'—';const x=new Date(d);return x.toLocaleDateString('th-TH',{year:'numeric',month:'2-digit',day:'2-digit'});}
+function fmtDT(d){if(!d)return'';return new Date(d).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'});}
+function rangeText(s){
+  if(!s.schedule||(!s.schedule.startAt&&!s.schedule.endAt))return{label:'ตลอดเวลา',cls:'gray'};
+  const now=Date.now();const st=s.schedule.startAt?new Date(s.schedule.startAt).getTime():null;const en=s.schedule.endAt?new Date(s.schedule.endAt).getTime():null;
+  if(en&&en<now)return{label:'หมดช่วงแล้ว',cls:'warn'};
+  if(st&&st>now)return{label:'รอขึ้นคิว',cls:'gray'};
+  return{label:'กำลังแสดง',cls:'ok'};
 }
-
-function applyTemplate(key) {
-  const tab = state.tabs[currentTab];
-  if (key !== 'custom') tab.areas = TEMPLATES[key].make();
-  else if (tab.template !== 'custom' && tab.areas.length) {
-    // เปลี่ยนจาก template → วาดเอง: เก็บปุ่มเดิมไว้ให้ปรับต่อ
+function renderList(){
+  const sets=setList();
+  const total=sets.length;
+  const live=sets.filter(s=>s.status==='live').length;
+  const def=sets.find(s=>s.id===S.defaultSetId);
+  const withImg=sets.filter(s=>s.tabs.tab1.hasImage&&s.tabs.tab2.hasImage).length;
+  const scheduled=sets.filter(s=>s.status==='scheduled').length;
+  document.getElementById('kpis').innerHTML=`
+    <div class="kpi"><div class="l">ชุดเมนูทั้งหมด</div><div class="v">${total}</div><div class="s">${live} Active</div></div>
+    <div class="kpi"><div class="l">ชุดที่เป็นเมนูเริ่มต้น</div><div class="v" style="font-size:19px;padding-top:4px">${def?def.name:'— ไม่มี —'}</div><div class="s">ผู้ใช้ทุกคนเห็นชุดนี้</div></div>
+    <div class="kpi"><div class="l">อัปโหลดรูปแล้ว</div><div class="v">${withImg}<span style="font-size:15px;color:var(--muted)">/${total}</span></div><div class="s">ชุดที่รูปครบ 2 แท็บ</div></div>
+    <div class="kpi"><div class="l">ตั้งเวลาไว้</div><div class="v">${scheduled}</div><div class="s">ชุดที่รอขึ้นตามเวลา</div></div>`;
+  const tb=document.getElementById('setRows');tb.innerHTML='';
+  document.getElementById('emptyList').classList.toggle('hide',total>0);
+  for(const s of sets){
+    const r=rangeText(s);
+    const th=id=>s.tabs[id].hasImage?`<img class="thumb" src="${s.tabs[id].image}">`:`<div class="thumb ph">—</div>`;
+    const isDef=s.id===S.defaultSetId;
+    const tr=document.createElement('tr');
+    tr.onclick=()=>openDetail(s.id);
+    tr.innerHTML=`
+      <td><div class="thumbs">${th('tab1')}${th('tab2')}</div></td>
+      <td><div class="setname">${esc(s.name)}</div><div class="setslug">${esc(s.slug)}</div></td>
+      <td>2</td>
+      <td>2500x1686</td>
+      <td><span class="pill ${r.cls}">${r.label}</span>${s.schedule&&s.schedule.startAt?`<div class="hint" style="margin-top:4px">${fmtDT(s.schedule.startAt)} → ${fmtDT(s.schedule.endAt)||'—'}</div>`:''}</td>
+      <td>${s.status==='live'?'<span class="pill ok dot">Active</span>':s.status==='scheduled'?'<span class="pill gray dot">รอขึ้น</span>':s.status==='ended'?'<span class="pill warn dot">จบแล้ว</span>':'<span class="pill gray dot">ร่าง</span>'}</td>
+      <td onclick="event.stopPropagation()">${isDef?'<span class="pill ok">Default</span>':`<button class="btn btn-sm" onclick="makeDefault('${s.id}')">ตั้งเป็นเริ่มต้น</button>`}</td>
+      <td>${fmtDate(s.createdAt)}</td>
+      <td onclick="event.stopPropagation()"><button class="btn btn-sm" onclick="delSet('${s.id}','${esc(s.name)}')">🗑</button></td>`;
+    tb.appendChild(tr);
   }
-  tab.template = key;
-  selectedArea = -1;
-  saveTab(); renderAll();
+}
+function esc(x){return String(x||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+async function makeDefault(id){toast('กำลัง Deploy เป็นเมนูเริ่มต้น...');const r=await api('/api/sets/'+id+'/publish',{method:'POST'});if(r.ok){toast('✅ ตั้งเป็นเมนูเริ่มต้นแล้ว');}else toast('❌ '+r.error);await refresh();}
+async function delSet(id,name){if(!confirm('ลบชุด "'+name+'" ?'))return;await api('/api/sets/'+id,{method:'DELETE'});toast('ลบแล้ว');await refresh();}
+
+// ---------------- create ----------------
+function openCreate(){createTabCount=2;createLayout=null;document.getElementById('cName').value='ชุดเมนูใหม่';setTabCount(2);document.getElementById('mCreate').classList.add('on');}
+function closeM(id){document.getElementById(id).classList.remove('on');}
+function setTabCount(n){
+  createTabCount=n;
+  ['tc1','tc2','tc3'].forEach((x,i)=>document.getElementById(x).classList.toggle('on',i+1===n));
+  const note=document.getElementById('cNote');
+  const keys=Object.keys(TPL).filter(k=>k!=='custom'&&(n===1?TPL[k].one:TPL[k].two));
+  note.textContent=n===1?'เมนูเดียว ไม่มีแถบสลับ — เต็มพื้นที่ภาพ 2500×1686':'LINE ไม่มีแถบสลับแท็บให้ — แถบต้องอยู่ในรูปที่เราออกแบบเอง เลย์เอาต์กันพื้นที่แถบด้านบนไว้ให้แล้ว (16% ของภาพ)';
+  const g=document.getElementById('cLay');g.innerHTML='';createLayout=keys[0];
+  keys.concat('custom').forEach(k=>{const d=document.createElement('div');d.className='lay'+(k===createLayout?' on':'');d.innerHTML=tplThumb(k)+`<div class="n">${TPL[k].n}</div>`;d.onclick=()=>{createLayout=k;setTabCount(n);};g.appendChild(d);});
+}
+async function doCreate(){
+  const name=document.getElementById('cName').value.trim()||'ชุดเมนูใหม่';
+  const r=await api('/api/sets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,layout:createLayout})});
+  closeM('mCreate');await refresh();openDetail(r.id);
 }
 
-// ---------------- canvas ----------------
-const canvas = document.getElementById('menuCanvas');
-const ctx = canvas.getContext('2d');
-const scale = () => canvas.width / MENU_W;
-
-function drawCanvas() {
-  const tab = state.tabs[currentTab];
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const img = images[currentTab];
-  if (img) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  else {
-    ctx.fillStyle = '#e8ecef'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#9aa5af'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('ยังไม่ได้อัปโหลดรูป (ขั้นตอนที่ 2)', canvas.width / 2, canvas.height / 2);
-  }
-  const s = scale();
-  tab.areas.forEach((a, i) => {
-    const sel = i === selectedArea;
-    const c = ACTION_COLOR[a.action.type] || ACTION_COLOR.uri;
-    ctx.lineWidth = sel ? 4 : 2.5;
-    ctx.strokeStyle = c.stroke;
-    ctx.fillStyle = c.fill;
-    if (a.action.type === 'none') ctx.setLineDash([8, 6]);
-    ctx.fillRect(a.x * s, a.y * s, a.w * s, a.h * s);
-    ctx.strokeRect(a.x * s + 1, a.y * s + 1, a.w * s - 2, a.h * s - 2);
-    ctx.setLineDash([]);
-    // number bubble
-    ctx.fillStyle = c.stroke;
-    ctx.beginPath(); ctx.arc(a.x * s + 17, a.y * s + 17, 13, 0, 7); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(i + 1, a.x * s + 17, a.y * s + 21.5);
-    // resize handles (custom + selected)
-    if (sel && isCustom()) {
-      const corners = [[a.x, a.y], [a.x + a.w, a.y], [a.x, a.y + a.h], [a.x + a.w, a.y + a.h]];
-      corners.forEach(([cx, cy]) => {
-        ctx.fillStyle = '#fff'; ctx.strokeStyle = c.stroke; ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.arc(cx * s, cy * s, 7, 0, 7); ctx.fill(); ctx.stroke();
-      });
+// ---------------- detail ----------------
+async function openDetail(id){
+  setId=id;tab='tab1';sel=-1;dirty=false;imgs={tab1:null,tab2:null};
+  const s=S.sets[id];
+  document.getElementById('view-list').classList.add('hide');
+  document.getElementById('view-detail').classList.remove('hide');
+  view='detail';
+  document.getElementById('dName').textContent=s.name;document.getElementById('dTitle').textContent=s.name;
+  document.getElementById('fName').value=s.name;
+  document.getElementById('fChatbar').value=s.chatBarText||'เมนู';
+  document.getElementById('fStart').value=toLocalInput(s.schedule?.startAt);
+  document.getElementById('fEnd').value=toLocalInput(s.schedule?.endAt);
+  // ชุดที่เพิ่งสร้าง: สร้างปุ่มตาม layout ที่เลือกไว้ให้อัตโนมัติ
+  for(const t of['tab1','tab2']){
+    const tb=s.tabs[t];
+    if((!tb.areas||!tb.areas.length)&&tb.template!=='custom'&&TPL[tb.template]){
+      tb.areas=TPL[tb.template].make();
+      await api('/api/sets/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tabs:{[t]:{template:tb.template,areas:tb.areas}}})});
     }
+    if(tb.hasImage)await loadImg(t,tb.image);
+  }
+  selTab('tab1');updateStatusUI();
+}
+function goList(){view='list';document.getElementById('view-detail').classList.add('hide');document.getElementById('view-list').classList.remove('hide');refresh();}
+function curSet(){return S.sets[setId];}
+function curTab(){return curSet().tabs[tab];}
+function isCustom(){return curTab().template==='custom';}
+
+function updateStatusUI(){
+  const s=curSet();const el=document.getElementById('dStatus');
+  const map={live:['ok','Active'],scheduled:['gray','รอขึ้นคิว'],ended:['warn','จบแล้ว'],draft:['gray','ร่าง']};
+  const[c,t]=map[s.status]||['gray',s.status];el.className='pill dot '+c;el.textContent=t;
+  const r=rangeText(s);document.getElementById('fRange').innerHTML=`<span class="pill ${r.cls}">${r.label}</span>`;
+  document.getElementById('fDefault').className='pill '+(s.id===S.defaultSetId?'ok':'gray');
+  document.getElementById('fDefault').textContent=s.id===S.defaultSetId?'Default':'ไม่ใช่';
+  const b=document.getElementById('dBanner');
+  const en=s.schedule?.endAt?new Date(s.schedule.endAt).getTime():null;
+  if(en&&en<Date.now())b.innerHTML='<div class="banner">ช่วงเวลานี้ผ่านไปแล้ว — ถ้าอยากให้แสดงต่อ ให้เลื่อนวัน “เอาลง” ไปข้างหน้า แล้ว Deploy อีกครั้ง</div>';
+  else b.innerHTML='';
+}
+
+function renderLayGrid(){
+  const g=document.getElementById('layGrid');g.innerHTML='';
+  Object.keys(TPL).forEach(k=>{const d=document.createElement('div');d.className='lay'+(curTab().template===k?' on':'');d.innerHTML=tplThumb(k)+`<div class="n">${TPL[k].n}</div>`;d.onclick=()=>applyTpl(k);g.appendChild(d);});
+  document.getElementById('cvHint').textContent=isCustom()?'ลากพื้นที่ว่าง=สร้างปุ่ม · ลากตัวปุ่ม=ย้าย · ลากมุม=ย่อ/ขยาย · คลิกปุ่ม=แก้ action':'คลิกปุ่มเพื่อแก้ action · ตำแหน่งล็อกตาม template (เลือก “วาดเอง” เพื่อขยับเอง)';
+}
+function applyTpl(k){const t=curTab();if(k!=='custom')t.areas=TPL[k].make();t.template=k;sel=-1;saveTab();renderAll();}
+
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const sc=()=>cv.width/W;
+function draw(){
+  const t=curTab();ctx.clearRect(0,0,cv.width,cv.height);
+  if(imgs[tab])ctx.drawImage(imgs[tab],0,0,cv.width,cv.height);
+  else{ctx.fillStyle='#e8ecef';ctx.fillRect(0,0,cv.width,cv.height);ctx.fillStyle='#9aa5af';ctx.font='18px sans-serif';ctx.textAlign='center';ctx.fillText('ยังไม่ได้อัปโหลดรูป',cv.width/2,cv.height/2);}
+  const s=sc();
+  (t.areas||[]).forEach((a,i)=>{
+    const on=i===sel,c=ACOL[a.action.type]||ACOL.uri;
+    ctx.lineWidth=on?4:2.5;ctx.strokeStyle=c.s;ctx.fillStyle=c.f;
+    if(a.action.type==='none')ctx.setLineDash([8,6]);
+    ctx.fillRect(a.x*s,a.y*s,a.w*s,a.h*s);ctx.strokeRect(a.x*s+1,a.y*s+1,a.w*s-2,a.h*s-2);ctx.setLineDash([]);
+    ctx.fillStyle=c.s;ctx.beginPath();ctx.arc(a.x*s+16,a.y*s+16,13,0,7);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText(i+1,a.x*s+16,a.y*s+20.5);
+    if(on&&isCustom())[[a.x,a.y],[a.x+a.w,a.y],[a.x,a.y+a.h],[a.x+a.w,a.y+a.h]].forEach(([cx,cy])=>{ctx.fillStyle='#fff';ctx.strokeStyle=c.s;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(cx*s,cy*s,7,0,7);ctx.fill();ctx.stroke();});
   });
 }
-
-function canvasPos(e) {
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / rect.width * MENU_W;
-  const y = (e.clientY - rect.top) / rect.height * MENU_H;
-  return { x: Math.max(0, Math.min(MENU_W, x)), y: Math.max(0, Math.min(MENU_H, y)) };
-}
-
-function hitCorner(a, p) {
-  const tol = 60; // px in menu coords
-  const corners = { nw: [a.x, a.y], ne: [a.x + a.w, a.y], sw: [a.x, a.y + a.h], se: [a.x + a.w, a.y + a.h] };
-  for (const k in corners) {
-    if (Math.abs(p.x - corners[k][0]) < tol && Math.abs(p.y - corners[k][1]) < tol) return k;
-  }
-  return null;
-}
-function hitArea(areas, p) {
-  for (let i = areas.length - 1; i >= 0; i--) {
-    const a = areas[i];
-    if (p.x >= a.x && p.x <= a.x + a.w && p.y >= a.y && p.y <= a.y + a.h) return i;
-  }
-  return -1;
-}
-
-canvas.addEventListener('mousedown', (e) => {
-  const p = canvasPos(e);
-  const tab = state.tabs[currentTab];
-  const custom = isCustom();
-
-  // 1) resize handle ของปุ่มที่เลือกอยู่ (custom เท่านั้น)
-  if (custom && selectedArea >= 0 && tab.areas[selectedArea]) {
-    const corner = hitCorner(tab.areas[selectedArea], p);
-    if (corner) { drag = { mode: 'resize', corner, idx: selectedArea, orig: { ...tab.areas[selectedArea] } }; return; }
-  }
-  // 2) คลิก/ลากบนปุ่ม
-  const hit = hitArea(tab.areas, p);
-  if (hit >= 0) {
-    selectArea(hit);
-    if (custom) drag = { mode: 'move', idx: hit, startP: p, orig: { ...tab.areas[hit] }, moved: false };
-    return;
-  }
-  // 3) พื้นที่ว่าง: custom = วาดปุ่มใหม่
-  if (custom) { drag = { mode: 'create', x0: p.x, y0: p.y }; }
-  else { selectedArea = -1; renderAreaPanel(); drawCanvas(); }
+function cpos(e){const r=cv.getBoundingClientRect();return{x:Math.max(0,Math.min(W,(e.clientX-r.left)/r.width*W)),y:Math.max(0,Math.min(H,(e.clientY-r.top)/r.height*H))};}
+function hitCorner(a,p){const tol=60,c={nw:[a.x,a.y],ne:[a.x+a.w,a.y],sw:[a.x,a.y+a.h],se:[a.x+a.w,a.y+a.h]};for(const k in c)if(Math.abs(p.x-c[k][0])<tol&&Math.abs(p.y-c[k][1])<tol)return k;return null;}
+function hitArea(ar,p){for(let i=ar.length-1;i>=0;i--){const a=ar[i];if(p.x>=a.x&&p.x<=a.x+a.w&&p.y>=a.y&&p.y<=a.y+a.h)return i;}return -1;}
+cv.addEventListener('mousedown',e=>{const p=cpos(e),t=curTab(),cu=isCustom();
+  if(cu&&sel>=0&&t.areas[sel]){const cn=hitCorner(t.areas[sel],p);if(cn){drag={mode:'resize',corner:cn,idx:sel,orig:{...t.areas[sel]}};return;}}
+  const h=hitArea(t.areas,p);
+  if(h>=0){selArea(h);if(cu)drag={mode:'move',idx:h,sp:p,orig:{...t.areas[h]}};return;}
+  if(cu)drag={mode:'create',x0:p.x,y0:p.y};else{sel=-1;renderSide();draw();}
+});
+cv.addEventListener('mousemove',e=>{const p=cpos(e),t=curTab();
+  if(!drag&&isCustom()){let c='crosshair';if(sel>=0&&t.areas[sel]&&hitCorner(t.areas[sel],p))c='nwse-resize';else if(hitArea(t.areas,p)>=0)c='move';cv.style.cursor=c;}else if(!isCustom())cv.style.cursor='pointer';
+  if(!drag)return;
+  if(drag.mode==='create'){draw();const s=sc();ctx.strokeStyle='#2563eb';ctx.setLineDash([6,4]);ctx.lineWidth=2;ctx.strokeRect(Math.min(drag.x0,p.x)*s,Math.min(drag.y0,p.y)*s,Math.abs(p.x-drag.x0)*s,Math.abs(p.y-drag.y0)*s);ctx.setLineDash([]);}
+  else if(drag.mode==='move'){const a=t.areas[drag.idx],dx=p.x-drag.sp.x,dy=p.y-drag.sp.y;a.x=Math.max(0,Math.min(W-a.w,drag.orig.x+dx));a.y=Math.max(0,Math.min(H-a.h,drag.orig.y+dy));coordsOnly(a);draw();}
+  else if(drag.mode==='resize'){const a=t.areas[drag.idx],o=drag.orig;let x1=o.x,y1=o.y,x2=o.x+o.w,y2=o.y+o.h;if(drag.corner==='nw'){x1=p.x;y1=p.y;}if(drag.corner==='ne'){x2=p.x;y1=p.y;}if(drag.corner==='sw'){x1=p.x;y2=p.y;}if(drag.corner==='se'){x2=p.x;y2=p.y;}a.x=Math.max(0,Math.min(x1,x2));a.y=Math.max(0,Math.min(y1,y2));a.w=Math.max(MIN,Math.abs(x2-x1));a.h=Math.max(MIN,Math.abs(y2-y1));if(a.x+a.w>W)a.w=W-a.x;if(a.y+a.h>H)a.h=H-a.y;coordsOnly(a);draw();}
+});
+window.addEventListener('mouseup',e=>{if(!drag)return;const t=curTab();
+  if(drag.mode==='create'){const p=cpos(e),w=Math.abs(p.x-drag.x0),h=Math.abs(p.y-drag.y0);if(w>MIN&&h>MIN){t.areas.push({x:Math.max(0,Math.min(drag.x0,p.x)),y:Math.max(0,Math.min(drag.y0,p.y)),w:Math.min(w,W),h:Math.min(h,H),action:{type:'uri',value:''}});sel=t.areas.length-1;saveTab();}}
+  else saveTab();
+  drag=null;renderAll();
 });
 
-canvas.addEventListener('mousemove', (e) => {
-  const p = canvasPos(e);
-  const tab = state.tabs[currentTab];
-  // cursor hint
-  if (!drag && isCustom()) {
-    let cur = 'crosshair';
-    if (selectedArea >= 0 && tab.areas[selectedArea] && hitCorner(tab.areas[selectedArea], p)) cur = 'nwse-resize';
-    else if (hitArea(tab.areas, p) >= 0) cur = 'move';
-    canvas.style.cursor = cur;
-  } else if (!isCustom()) canvas.style.cursor = 'pointer';
+function selArea(i){sel=i;renderSide();draw();}
+function coordsOnly(a){aX.value=Math.round(a.x);aY.value=Math.round(a.y);aW.value=Math.round(a.w);aH.value=Math.round(a.h);}
+function renderSide(){
+  const t=curTab();const list=document.getElementById('chips');list.innerHTML='';
+  document.getElementById('areaCount').textContent=(t.areas||[]).length;
+  (t.areas||[]).forEach((a,i)=>{const c=document.createElement('div');c.className='chip t-'+a.action.type+(i===sel?' on':'');c.textContent=(i+1)+' '+(AICON[a.action.type]||'');c.onclick=()=>selArea(i);list.appendChild(c);});
+  const ed=document.getElementById('areaEditor'),na=document.getElementById('noArea');
+  if(sel<0||!t.areas[sel]){ed.classList.add('hide');na.classList.remove('hide');return;}
+  ed.classList.remove('hide');na.classList.add('hide');
+  const a=t.areas[sel];coordsOnly(a);const cu=isCustom();
+  ['aX','aY','aW','aH'].forEach(id=>document.getElementById(id).disabled=!cu);
+  document.getElementById('lockNote').textContent=cu?'':'— ล็อกตาม template';
+  document.getElementById('delBtn').style.display=cu?'inline-flex':'none';
+  aType.value=a.action.type;syncVal(a);
+}
+function syncVal(a){const t=a.action.type;document.getElementById('aSwitch').classList.toggle('hide',t!=='switch');const v=document.getElementById('aVal');v.classList.toggle('hide',!(t==='uri'||t==='message'));const lb=document.getElementById('valLabel');lb.classList.toggle('hide',t==='none');lb.textContent=t==='switch'?'สลับไปที่':t==='uri'?'ลิงก์ URL (ขึ้นต้น https://)':'ข้อความที่จะส่ง';if(t==='switch')document.getElementById('aSwitch').value=a.action.value==='tab2'?'tab2':'tab1';else if(t!=='none'){v.value=a.action.value||'';v.placeholder=t==='uri'?'https://www.example.com':'เช่น สวัสดีครับ';}}
+function coordChange(){if(!isCustom())return;const a=curTab().areas[sel];if(!a)return;a.x=Math.max(0,Math.min(W-MIN,+aX.value||0));a.y=Math.max(0,Math.min(H-MIN,+aY.value||0));a.w=Math.max(MIN,Math.min(W-a.x,+aW.value||MIN));a.h=Math.max(MIN,Math.min(H-a.y,+aH.value||MIN));coordsOnly(a);saveTab();draw();}
+function actionTypeChange(){const a=curTab().areas[sel];if(!a)return;a.action.type=aType.value;a.action.value=aType.value==='switch'?(tab==='tab1'?'tab2':'tab1'):'';syncVal(a);saveTab();draw();renderSide();}
+function valChange(){const a=curTab().areas[sel];if(!a)return;if(a.action.type==='switch')a.action.value=document.getElementById('aSwitch').value;else if(a.action.type!=='none')a.action.value=document.getElementById('aVal').value.trim();saveTab();renderSide();draw();}
+function delArea(){if(!isCustom())return;curTab().areas.splice(sel,1);sel=-1;saveTab();renderAll();}
 
-  if (!drag) return;
-  if (drag.mode === 'create') {
-    drawCanvas();
-    const s = scale();
-    ctx.strokeStyle = '#0b57d0'; ctx.setLineDash([6, 4]); ctx.lineWidth = 2;
-    ctx.strokeRect(Math.min(drag.x0,p.x)*s, Math.min(drag.y0,p.y)*s, Math.abs(p.x-drag.x0)*s, Math.abs(p.y-drag.y0)*s);
-    ctx.setLineDash([]);
-  } else if (drag.mode === 'move') {
-    const a = tab.areas[drag.idx];
-    const dx = p.x - drag.startP.x, dy = p.y - drag.startP.y;
-    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) drag.moved = true;
-    a.x = Math.max(0, Math.min(MENU_W - a.w, drag.orig.x + dx));
-    a.y = Math.max(0, Math.min(MENU_H - a.h, drag.orig.y + dy));
-    renderCoordsOnly(a); drawCanvas();
-  } else if (drag.mode === 'resize') {
-    const a = tab.areas[drag.idx];
-    const o = drag.orig;
-    let x1 = o.x, y1 = o.y, x2 = o.x + o.w, y2 = o.y + o.h;
-    if (drag.corner === 'nw') { x1 = p.x; y1 = p.y; }
-    if (drag.corner === 'ne') { x2 = p.x; y1 = p.y; }
-    if (drag.corner === 'sw') { x1 = p.x; y2 = p.y; }
-    if (drag.corner === 'se') { x2 = p.x; y2 = p.y; }
-    a.x = Math.max(0, Math.min(x1, x2));
-    a.y = Math.max(0, Math.min(y1, y2));
-    a.w = Math.max(MIN_SIZE, Math.abs(x2 - x1));
-    a.h = Math.max(MIN_SIZE, Math.abs(y2 - y1));
-    if (a.x + a.w > MENU_W) a.w = MENU_W - a.x;
-    if (a.y + a.h > MENU_H) a.h = MENU_H - a.y;
-    renderCoordsOnly(a); drawCanvas();
-  }
-});
+function selTab(t){tab=t;sel=-1;document.getElementById('nt1').classList.toggle('on',t==='tab1');document.getElementById('nt2').classList.toggle('on',t==='tab2');renderAll();}
+function renderAll(){renderLayGrid();renderSide();draw();}
+function metaChange(){const s=curSet();s.name=document.getElementById('fName').value;s.chatBarText=document.getElementById('fChatbar').value;document.getElementById('dName').textContent=s.name;document.getElementById('dTitle').textContent=s.name;dirty=true;saveMeta();}
 
-window.addEventListener('mouseup', (e) => {
-  if (!drag) return;
-  const tab = state.tabs[currentTab];
-  if (drag.mode === 'create') {
-    const p = canvasPos(e);
-    const w = Math.abs(p.x - drag.x0), h = Math.abs(p.y - drag.y0);
-    if (w > MIN_SIZE && h > MIN_SIZE) {
-      tab.areas.push({
-        x: Math.max(0, Math.min(drag.x0, p.x)), y: Math.max(0, Math.min(drag.y0, p.y)),
-        w: Math.min(w, MENU_W), h: Math.min(h, MENU_H),
-        action: { type: 'uri', value: '' },
-      });
-      selectedArea = tab.areas.length - 1;
-      saveTab();
-    }
-  } else if (drag.mode === 'move' || drag.mode === 'resize') {
-    saveTab();
-  }
-  drag = null; renderAll();
-});
+let saveT=null, pendingSave=null;
+function saveTab(){
+  dirty=true;clearTimeout(saveT);
+  const sid=setId,tk=tab; // จับค่า ณ ตอนแก้ กันบันทึกผิดแท็บถ้าสลับแท็บเร็ว
+  pendingSave=async()=>{pendingSave=null;const t=S.sets[sid].tabs[tk];await api('/api/sets/'+sid,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tabs:{[tk]:{name:t.name,template:t.template,areas:t.areas}}})});};
+  saveT=setTimeout(()=>{if(pendingSave)pendingSave();},400);
+}
+async function flushSave(){clearTimeout(saveT);if(pendingSave)await pendingSave();}
+async function saveMeta(){const s=curSet();await api('/api/sets/'+setId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:s.name,chatBarText:s.chatBarText,schedule:schedFromInputs()})});}
 
-// ---------------- area editor ----------------
-function selectArea(i) { selectedArea = i; renderAreaPanel(); drawCanvas(); }
+// image
+function resizeImg(file){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=W;c.height=H;const cx=c.getContext('2d');const sr=img.width/img.height,dr=W/H;let sx=0,sy=0,sw=img.width,sh=img.height;if(sr>dr){sw=img.height*dr;sx=(img.width-sw)/2;}else{sh=img.width/dr;sy=(img.height-sh)/2;}cx.fillStyle='#fff';cx.fillRect(0,0,W,H);cx.drawImage(img,sx,sy,sw,sh,0,0,W,H);let q=.9,d;do{d=c.toDataURL('image/jpeg',q);q-=.1;}while(d.length*.75>1000*1024&&q>=.3);res(d);};img.onerror=()=>rej(new Error('อ่านรูปไม่ได้'));img.src=URL.createObjectURL(file);});}
+async function upImg(file){if(!file)return;try{toast('กำลังปรับขนาด+อัปโหลด...');const d=await resizeImg(file);const r=await api('/api/sets/'+setId+'/'+tab+'/image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl:d})});if(!r.ok)return toast('❌ '+r.error);curSet().tabs[tab].hasImage=true;await loadImgData(tab,d);dirty=true;toast('✅ อัปโหลดแล้ว ('+r.sizeKB+' KB)');draw();}catch(e){toast('❌ '+e.message);}}
+function loadImg(t,url){return new Promise(r=>{const i=new Image();i.onload=()=>{imgs[t]=i;r();};i.onerror=()=>r();i.src=url;});}
+function loadImgData(t,d){return new Promise(r=>{const i=new Image();i.onload=()=>{imgs[t]=i;r();};i.onerror=()=>r();i.src=d;});}
+const uz=document.getElementById('uz');uz.addEventListener('dragover',e=>{e.preventDefault();uz.style.borderColor='var(--red)';});uz.addEventListener('dragleave',()=>uz.style.borderColor='');uz.addEventListener('drop',e=>{e.preventDefault();uz.style.borderColor='';upImg(e.dataTransfer.files[0]);});
 
-function renderCoordsOnly(a) {
-  aX.value = Math.round(a.x); aY.value = Math.round(a.y);
-  aW.value = Math.round(a.w); aH.value = Math.round(a.h);
+// draft / publish
+function showLog(a,id='log'){const b=document.getElementById(id);b.style.display='block';b.textContent=a.join('\n');b.scrollTop=b.scrollHeight;}
+async function saveDraft(){await flushSave();await saveMeta();const r=await api('/api/sets/'+setId+'/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({schedule:schedFromInputs()})});if(r.ok){curSet().draftSavedAt=r.draftSavedAt;curSet().status=r.status;dirty=false;updateStatusUI();toast('💾 บันทึกแบบร่างแล้ว'+(r.status==='scheduled'?' · ตั้งเวลารอขึ้นคิว':''));}}
+async function publishNow(){const st=document.getElementById('fStart').value;if(st&&new Date(st)>new Date()){if(!confirm('ตั้งเวลาเริ่ม '+new Date(st).toLocaleString('th-TH')+' — Deploy เลยตอนนี้หรือไม่?'))return;}
+  const btn=event.target;btn.disabled=true;btn.textContent='⏳ กำลัง Deploy...';
+  try{const r=await api('/api/sets/'+setId+'/publish',{method:'POST'});showLog(r.logs||[]);if(r.ok){toast('✅ Deploy สำเร็จ');await reloadSet();}else toast('❌ '+r.error);}
+  finally{btn.disabled=false;btn.textContent='🚀 Deploy ทั้งชุด';}
+}
+async function reloadSet(){const id=setId;S=await api('/api/state');setId=id;updateStatusUI();}
+function showJson(){const s=curSet();const o={name:s.name,chatBarText:s.chatBarText,schedule:s.schedule,tabs:{tab1:{template:s.tabs.tab1.template,areas:s.tabs.tab1.areas},tab2:{template:s.tabs.tab2.template,areas:s.tabs.tab2.areas}}};showLog([JSON.stringify(o,null,2)]);}
+
+// config
+function openConfig(){document.getElementById('cfgBar').value=S.config.chatBarText||'เมนู';document.getElementById('tokHint').textContent=S.config.tokenSet?'ตั้งแล้ว '+S.config.tokenHint:'ยังไม่ตั้ง';document.getElementById('tokHint').className='pill '+(S.config.tokenSet?'ok':'warn');document.getElementById('storeHint').innerHTML=S.storage==='supabase'?'✅ เก็บถาวรด้วย Supabase — ข้อมูลไม่หายตอน server restart':'⚠️ โหมด local — ข้อมูลจะหายเมื่อ server restart (ตั้ง SUPABASE_URL/KEY ใน Render เพื่อเก็บถาวร)';document.getElementById('mConfig').classList.add('on');}
+async function saveConfig(){const b={};const t=document.getElementById('cfgTok').value.trim(),se=document.getElementById('cfgSec').value.trim(),c=document.getElementById('cfgBar').value.trim();if(t)b.channelAccessToken=t;if(se)b.channelSecret=se;if(c)b.chatBarText=c;await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});toast('✅ บันทึกแล้ว');await refresh();}
+async function testConn(){const el=document.getElementById('connRes');el.innerHTML='<span class="pill gray">กำลังทดสอบ...</span>';const r=await api('/api/test-connection',{method:'POST'});el.innerHTML=r.ok?`<span class="pill ok">✅ ${esc(r.bot.displayName)} (${esc(r.bot.basicId)})</span>`:`<span class="pill warn">❌ ${esc(r.error)}</span>`;await refresh();}
+async function resetAll(){if(!confirm('ลบ Rich Menu + alias ทั้งหมดบน channel?'))return;const r=await api('/api/reset-richmenus',{method:'POST'});showLog([...(r.logs||[]),r.ok?'✅ ลบเรียบร้อย':'❌ '+r.error],'cfgLog');await refresh();}
+
+// live
+async function openLive(){document.getElementById('mLive').classList.add('on');document.getElementById('liveBody').innerHTML='กำลังโหลด...';const r=await api('/api/live');if(!r.ok){document.getElementById('liveBody').innerHTML='<div class="pill warn">❌ '+esc(r.error)+'</div>';return;}
+  if(!r.richmenus.length){document.getElementById('liveBody').innerHTML='<div class="empty">ยังไม่มี rich menu บน channel นี้</div>';return;}
+  document.getElementById('liveBody').innerHTML=r.richmenus.map(m=>`<div style="display:flex;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px">
+    <img src="/api/live-image/${m.richMenuId}" style="width:120px;height:81px;object-fit:cover;border-radius:6px;border:1px solid var(--line);background:#f0f1f3">
+    <div style="flex:1"><div style="font-weight:700">${esc(m.name||'(ไม่มีชื่อ)')} ${m.richMenuId===r.defaultId?'<span class="pill ok">Active/Default</span>':''}</div>
+    <div class="setslug">${m.richMenuId}</div><div class="hint">${(m.areas||[]).length} ปุ่ม · chatBar: ${esc(m.chatBarText||'')}</div></div></div>`).join('')
+    +`<div class="hint" style="margin-top:8px">Default ปัจจุบัน: ${r.defaultId?esc(r.defaultId):'— ไม่มี —'} · alias: ${(r.aliases||[]).map(a=>esc(a.richMenuAliasId)).join(', ')||'—'}</div>`;
 }
 
-function renderAreaPanel() {
-  const tab = state.tabs[currentTab];
-  const list = document.getElementById('areaList');
-  list.innerHTML = '';
-  tab.areas.forEach((a, i) => {
-    const chip = document.createElement('div');
-    chip.className = `area-chip t-${a.action.type}` + (i === selectedArea ? ' active' : '');
-    chip.textContent = `${i + 1} ${ACTION_ICON[a.action.type] || ''}`;
-    chip.onclick = () => selectArea(i);
-    list.appendChild(chip);
-  });
-  const editor = document.getElementById('areaEditor');
-  const hint = document.getElementById('noAreaHint');
-  if (selectedArea < 0 || !tab.areas[selectedArea]) { editor.style.display = 'none'; hint.style.display = 'block'; return; }
-  editor.style.display = 'block'; hint.style.display = 'none';
-  const a = tab.areas[selectedArea];
-  renderCoordsOnly(a);
-  const custom = isCustom();
-  ['aX','aY','aW','aH'].forEach((id) => document.getElementById(id).disabled = !custom);
-  document.getElementById('lockNote').textContent = custom ? '' : '— ล็อกตาม template';
-  document.getElementById('delAreaBtn').style.display = custom ? 'inline-block' : 'none';
-  aType.value = a.action.type;
-  syncValueInputs(a);
-}
-
-function syncValueInputs(a) {
-  const t = a.action.type;
-  document.getElementById('aSwitchTarget').style.display = t === 'switch' ? 'block' : 'none';
-  const valInput = document.getElementById('aValue');
-  valInput.style.display = (t === 'uri' || t === 'message') ? 'block' : 'none';
-  const lbl = document.getElementById('aValueLabel');
-  lbl.style.display = t === 'none' ? 'none' : 'block';
-  lbl.textContent = t === 'switch' ? 'สลับไปที่' : t === 'uri' ? 'ลิงก์ URL (ต้องขึ้นต้น https://)' : 'ข้อความที่จะส่ง';
-  if (t === 'switch') document.getElementById('aSwitchTarget').value = a.action.value === 'tab2' ? 'tab2' : 'tab1';
-  else if (t !== 'none') { valInput.value = a.action.value || ''; valInput.placeholder = t === 'uri' ? 'https://www.example.com' : 'เช่น สวัสดีครับ'; }
-}
-
-function onCoordChange() {
-  if (!isCustom()) return;
-  const a = state.tabs[currentTab].areas[selectedArea]; if (!a) return;
-  a.x = Math.max(0, Math.min(MENU_W - MIN_SIZE, +aX.value || 0));
-  a.y = Math.max(0, Math.min(MENU_H - MIN_SIZE, +aY.value || 0));
-  a.w = Math.max(MIN_SIZE, Math.min(MENU_W - a.x, +aW.value || MIN_SIZE));
-  a.h = Math.max(MIN_SIZE, Math.min(MENU_H - a.y, +aH.value || MIN_SIZE));
-  renderCoordsOnly(a);
-  saveTab(); drawCanvas();
-}
-function onActionTypeChange() {
-  const a = state.tabs[currentTab].areas[selectedArea]; if (!a) return;
-  a.action.type = aType.value;
-  a.action.value = aType.value === 'switch' ? (currentTab === 'tab1' ? 'tab2' : 'tab1') : '';
-  syncValueInputs(a); saveTab(); drawCanvas(); renderAreaPanel();
-}
-function onValueChange() {
-  const a = state.tabs[currentTab].areas[selectedArea]; if (!a) return;
-  if (a.action.type === 'switch') a.action.value = document.getElementById('aSwitchTarget').value;
-  else if (a.action.type !== 'none') a.action.value = document.getElementById('aValue').value.trim();
-  saveTab(); renderAreaPanel(); drawCanvas();
-}
-function deleteArea() {
-  if (!isCustom()) return;
-  state.tabs[currentTab].areas.splice(selectedArea, 1);
-  selectedArea = -1; saveTab(); renderAll();
-}
-
-// ---------------- page/tab switching ----------------
-function switchPage(p) {
-  document.getElementById('pageDesign').className = 'page' + (p === 'design' ? ' active' : '');
-  document.getElementById('pageConfig').className = 'page' + (p === 'config' ? ' active' : '');
-  document.getElementById('navDesign').className = p === 'design' ? 'active' : '';
-  document.getElementById('navConfig').className = p === 'config' ? 'active' : '';
-  if (p === 'design') drawCanvas();
-}
-function switchTab(id) {
-  currentTab = id; selectedArea = -1;
-  document.getElementById('navTab1').className = id === 'tab1' ? 'active' : '';
-  document.getElementById('navTab2').className = id === 'tab2' ? 'active' : '';
-  document.getElementById('tabName').value = state.tabs[id].name;
-  renderAll();
-}
-function onTabMetaChange() {
-  state.tabs[currentTab].name = document.getElementById('tabName').value;
-  saveTab();
-}
-
-let saveTimer = null;
-function markDirty() { dirty = true; updateDraftBadge(); }
-function saveTab() {
-  markDirty();
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    const t = state.tabs[currentTab];
-    await fetch(`/api/tabs/${currentTab}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: t.name, template: t.template, areas: t.areas }),
-    });
-    backupLocal();
-  }, 400);
-}
-function renderAll() { renderTplGrid(); renderAreaPanel(); drawCanvas(); }
-
-// ---------------- upload ----------------
-function resizeToRichMenu(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = MENU_W; c.height = MENU_H;
-      const cx = c.getContext('2d');
-      const srcRatio = img.width / img.height, dstRatio = MENU_W / MENU_H;
-      let sx = 0, sy = 0, sw = img.width, sh = img.height;
-      if (srcRatio > dstRatio) { sw = img.height * dstRatio; sx = (img.width - sw) / 2; }
-      else { sh = img.width / dstRatio; sy = (img.height - sh) / 2; }
-      cx.fillStyle = '#fff'; cx.fillRect(0, 0, MENU_W, MENU_H);
-      cx.drawImage(img, sx, sy, sw, sh, 0, 0, MENU_W, MENU_H);
-      let q = 0.9, dataUrl;
-      do { dataUrl = c.toDataURL('image/jpeg', q); q -= 0.1; }
-      while (dataUrl.length * 0.75 > 1000 * 1024 && q >= 0.3);
-      resolve(dataUrl);
-    };
-    img.onerror = () => reject(new Error('อ่านไฟล์รูปไม่ได้'));
-    img.src = URL.createObjectURL(file);
-  });
-}
-async function uploadImage(file) {
-  if (!file) return;
-  try {
-    toast('กำลังปรับขนาดและอัปโหลดรูป...');
-    const dataUrl = await resizeToRichMenu(file);
-    const res = await fetch(`/api/tabs/${currentTab}/image`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataUrl }),
-    });
-    const data = await res.json();
-    if (!res.ok) return toast('❌ ' + (data.error || 'อัปโหลดไม่สำเร็จ'));
-    imageDataUrls[currentTab] = dataUrl;
-    await loadImage(currentTab, data.url);
-    markDirty();
-    backupLocal();
-    toast(`✅ อัปโหลดสำเร็จ (${data.sizeKB} KB)`);
-    drawCanvas();
-  } catch (e) { toast('❌ ' + e.message); }
-}
-const zone = document.getElementById('uploadZone');
-zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.style.borderColor = '#06C755'; });
-zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
-zone.addEventListener('drop', (e) => { e.preventDefault(); zone.style.borderColor = ''; uploadImage(e.dataTransfer.files[0]); });
-function loadImage(tabId, url) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      images[tabId] = img;
-      // เก็บ dataUrl ไว้ backup (กรณีรูปมาจาก server)
-      if (!imageDataUrls[tabId]) {
-        try {
-          const c = document.createElement('canvas');
-          c.width = MENU_W; c.height = MENU_H;
-          c.getContext('2d').drawImage(img, 0, 0, MENU_W, MENU_H);
-          let q = 0.85, d;
-          do { d = c.toDataURL('image/jpeg', q); q -= 0.1; }
-          while (d.length * 0.75 > 1000 * 1024 && q >= 0.3);
-          imageDataUrls[tabId] = d;
-        } catch {}
-      }
-      resolve();
-    };
-    img.onerror = () => resolve();
-    img.src = url;
-  });
-}
-
-// ---------------- config ----------------
-async function saveConfig() {
-  const body = {};
-  const t = document.getElementById('cfgToken').value.trim();
-  const s = document.getElementById('cfgSecret').value.trim();
-  const c = document.getElementById('cfgChatBar').value.trim();
-  if (t) body.channelAccessToken = t;
-  if (s) body.channelSecret = s;
-  if (c) body.chatBarText = c;
-  await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  toast('✅ บันทึกการตั้งค่าแล้ว');
-  refreshState(false);
-}
-async function testConnection() {
-  const el = document.getElementById('connResult');
-  el.innerHTML = '<span class="badge">กำลังทดสอบ...</span>';
-  const res = await fetch('/api/test-connection', { method: 'POST' });
-  const data = await res.json();
-  if (data.ok) {
-    el.innerHTML = `<span class="badge ok">✅ เชื่อมต่อสำเร็จ: ${data.bot.displayName} (${data.bot.basicId})</span>`;
-    document.getElementById('botBadge').className = 'badge ok';
-    document.getElementById('botBadge').textContent = data.bot.displayName;
-  } else {
-    el.innerHTML = `<span class="badge err">❌ ${data.error}</span>`;
-  }
-}
-
-// ---------------- draft / schedule / publish ----------------
-function updateDraftBadge() {
-  const el = document.getElementById('draftStatus');
-  if (dirty || !state.draftSavedAt) { el.className = 'badge warn'; el.textContent = 'มีการแก้ไขที่ยังไม่ได้บันทึก'; }
-  else {
-    el.className = 'badge ok';
-    el.textContent = 'บันทึกล่าสุด ' + new Date(state.draftSavedAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
-  }
-}
-async function saveDraft() {
-  clearTimeout(saveTimer);
-  const t = state.tabs[currentTab];
-  await fetch(`/api/tabs/${currentTab}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: t.name, template: t.template, areas: t.areas }),
-  });
-  const res = await fetch('/api/draft', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ schedule: { startAt: document.getElementById('schStart').value, endAt: document.getElementById('schEnd').value } }),
-  });
-  const data = await res.json();
-  if (data.ok) { state.draftSavedAt = data.draftSavedAt; dirty = false; updateDraftBadge(); backupLocal(); toast('💾 บันทึก Draft แล้ว'); }
-}
-function showLogs(logs, boxId = 'logBox') {
-  const box = document.getElementById(boxId);
-  box.style.display = 'block';
-  box.textContent = logs.join('\n');
-  box.scrollTop = box.scrollHeight;
-}
-async function publish() {
-  const st = document.getElementById('schStart').value;
-  if (st && new Date(st) > new Date()) {
-    if (!confirm(`Campaign ตั้งเวลาเริ่ม ${new Date(st).toLocaleString('th-TH')} — ยังไม่ถึงเวลา ต้องการเผยแพร่ตอนนี้เลยหรือไม่?`)) return;
-  }
-  const btn = document.getElementById('publishBtn');
-  btn.disabled = true; btn.textContent = '⏳ กำลังเผยแพร่...';
-  try {
-    const res = await fetch('/api/publish', { method: 'POST' });
-    const data = await res.json();
-    showLogs(data.logs || []);
-    document.getElementById('pubStatus').innerHTML = data.ok
-      ? '<span class="badge ok">✅ เผยแพร่สำเร็จ! ลองเปิดแชท LINE ดูได้เลย</span>'
-      : `<span class="badge err">❌ ${data.error}</span>`;
-  } finally {
-    btn.disabled = false; btn.textContent = '🚀 เผยแพร่ Rich Menu';
-  }
-}
-async function listMenus() {
-  const res = await fetch('/api/richmenus');
-  const data = await res.json();
-  if (!data.ok) return showLogs(['❌ ' + data.error], 'logBoxConfig');
-  const lines = data.richmenus.length
-    ? data.richmenus.map((m) => `• ${m.name} — ${m.richMenuId} (${m.areas.length} ปุ่ม)`)
-    : ['(ยังไม่มี rich menu บน channel นี้)'];
-  showLogs(['Rich menus บน channel:', ...lines], 'logBoxConfig');
-}
-async function resetMenus() {
-  if (!confirm('ลบ Rich Menu และ alias ทั้งหมดบน channel นี้?')) return;
-  const res = await fetch('/api/reset-richmenus', { method: 'POST' });
-  const data = await res.json();
-  showLogs([...(data.logs || []), data.ok ? '✅ ลบเรียบร้อย' : '❌ ' + data.error], 'logBoxConfig');
-}
-
-// ---------------- init ----------------
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2600);
-}
-async function refreshState(loadImgs = true) {
-  const res = await fetch('/api/state');
-  state = await res.json();
-  document.getElementById('cfgChatBar').value = state.config.chatBarText || 'เมนู';
-  document.getElementById('tokenHint').textContent = state.config.tokenSet ? 'ตั้งค่าแล้ว ' + state.config.tokenHint : 'ยังไม่ได้ตั้งค่า';
-  document.getElementById('tokenHint').className = 'badge ' + (state.config.tokenSet ? 'ok' : 'err');
-  if (state.schedule) {
-    document.getElementById('schStart').value = state.schedule.startAt || '';
-    document.getElementById('schEnd').value = state.schedule.endAt || '';
-  }
-  dirty = !!(state.lastModifiedAt && (!state.draftSavedAt || state.draftSavedAt < state.lastModifiedAt));
-  updateDraftBadge();
-  if (loadImgs) {
-    // server ถูกล้าง (free tier restart) → กู้คืนจาก backup ในเบราว์เซอร์
-    const empty = !state.tabs.tab1.image && !state.tabs.tab2.image
-      && !state.tabs.tab1.areas.length && !state.tabs.tab2.areas.length;
-    let backup = null;
-    try { backup = JSON.parse(localStorage.getItem('rm_backup') || 'null'); } catch {}
-    if (empty && backup && backup.tabs) {
-      toast('♻️ Server ถูกรีเซ็ต — กำลังกู้คืนงานล่าสุดจากเบราว์เซอร์...');
-      await restoreBackup(backup);
-      const res2 = await fetch('/api/state');
-      state = await res2.json();
-      if (state.schedule) {
-        document.getElementById('schStart').value = state.schedule.startAt || '';
-        document.getElementById('schEnd').value = state.schedule.endAt || '';
-      }
-      toast('♻️ กู้คืนงานล่าสุดแล้ว — ถ้ายังไม่ได้ตั้ง token เป็น env ต้องใส่ token ใหม่');
-    }
-    for (const id of ['tab1', 'tab2']) {
-      if (state.tabs[id].image) await loadImage(id, `/uploads/${state.tabs[id].image}?t=${Date.now()}`);
-    }
-  }
-  document.getElementById('tabName').value = state.tabs[currentTab].name;
-  renderAll();
-}
-refreshState();
+refresh();
 </script>
 </body>
 </html>
