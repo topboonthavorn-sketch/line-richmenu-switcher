@@ -327,7 +327,7 @@ function rangeText(s){
   const now=Date.now();const st=s.schedule.startAt?new Date(s.schedule.startAt).getTime():null;const en=s.schedule.endAt?new Date(s.schedule.endAt).getTime():null;
   if(en&&en<now)return{label:'หมดช่วงแล้ว',cls:'warn'};
   if(st&&st>now)return{label:'รอขึ้นคิว',cls:'gray'};
-  return{label:'กำลังแสดง',cls:'ok'};
+  return{label:'อยู่ในช่วงเวลา',cls:'ok'};
 }
 function renderList(){
   const sets=setList();
@@ -424,7 +424,8 @@ function updateStatusUI(){
   const s=curSet();const el=document.getElementById('dStatus');
   const map={live:['ok','Active'],scheduled:['gray','รอขึ้นคิว'],ended:['warn','จบแล้ว'],draft:['gray','ร่าง']};
   const[c,t]=map[s.status]||['gray',s.status];el.className='pill dot '+c;el.textContent=t;
-  const r=rangeText(s);document.getElementById('fRange').innerHTML=`<span class="pill ${r.cls}">${r.label}</span>`;
+  const r=rangeText(s);const sc_=s.schedule||{};
+  document.getElementById('fRange').innerHTML=`<span class="pill ${r.cls}">${r.label}</span>`+((sc_.startAt||sc_.endAt)?`<div class="hint" style="margin-top:4px">${fmtDT(sc_.startAt)||'ตอนนี้'} → ${fmtDT(sc_.endAt)||'ไม่กำหนด'}</div>`:'');
   document.getElementById('fDefault').className='pill '+(s.id===S.defaultSetId?'ok':'gray');
   document.getElementById('fDefault').textContent=s.id===S.defaultSetId?'Default':'ไม่ใช่';
   const b=document.getElementById('dBanner');
@@ -503,7 +504,7 @@ function delArea(){if(!isCustom())return;curTab().areas.splice(sel,1);sel=-1;sav
 
 function selTab(t){tab=t;sel=-1;document.getElementById('nt1').classList.toggle('on',t==='tab1');document.getElementById('nt2').classList.toggle('on',t==='tab2');renderAll();}
 function renderAll(){renderLayGrid();renderSide();draw();}
-function metaChange(){const s=curSet();s.name=document.getElementById('fName').value;s.chatBarText=document.getElementById('fChatbar').value;document.getElementById('dName').textContent=s.name;document.getElementById('dTitle').textContent=s.name;dirty=true;saveMeta();}
+function metaChange(){const s=curSet();s.name=document.getElementById('fName').value;s.chatBarText=document.getElementById('fChatbar').value;s.schedule=schedFromInputs();document.getElementById('dName').textContent=s.name;document.getElementById('dTitle').textContent=s.name;dirty=true;updateStatusUI();saveMeta();}
 
 let saveT=null, pendingSave=null;
 function saveTab(){
