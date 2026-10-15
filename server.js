@@ -7,7 +7,8 @@
  * - ตั้งเวลาขึ้น-ลงอัตโนมัติ (scheduler) + webhook เก็บการกดปุ่ม
  * Pure Node.js 18+ (ไม่มี dependency)
  *
- * ENV: SUPABASE_URL, SUPABASE_KEY, SIGNUP_CODE (หรือ ADMIN_PASSWORD) = รหัสสำหรับสร้าง workspace ใหม่,
+ * ENV: SUPABASE_URL, SUPABASE_KEY, ADMIN_PASSWORD = รหัสเข้าหน้า /admin
+ *      (รหัสสร้าง workspace ตั้ง/เปลี่ยนได้ที่หน้า /admin),
  *      APP_SECRET (ไม่บังคับ — ใช้เข้ารหัส ถ้าไม่ตั้งจะใช้ค่าจาก SUPABASE_KEY)
  */
 
@@ -27,7 +28,7 @@ const ALIASES = { tab1: 'switcher-tab-1', tab2: 'switcher-tab-2' };
 const SUPA_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
 const SUPA_KEY = (process.env.SUPABASE_KEY || '').trim();
 const USE_SUPA = !!(SUPA_URL && SUPA_KEY);
-const SIGNUP_CODE = (process.env.SIGNUP_CODE || process.env.ADMIN_PASSWORD || '').trim();
+const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '').trim();   // รหัสเข้าหน้า /admin
 const SECRET = crypto.createHash('sha256').update(process.env.APP_SECRET || SUPA_KEY || 'local-dev-secret').digest();
 const BUCKET = 'richmenu-images';
 
@@ -71,9 +72,26 @@ function readSession(req) {
   if (sign(`${id}.${exp}`) !== sig || Number(exp) < Date.now()) return null;
   return id;
 }
-function sessionCookie(req, value, maxAge) {
+function sessionCookie(req, value, maxAge, name = 'rm_session') {
   const secure = (req.headers['x-forwarded-proto'] || '').includes('https') ? '; Secure' : '';
-  return `rm_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+function makeAdminSession() { const v = `admin.${Date.now() + 12 * 3600e3}`; return `${v}.${sign(v)}`; }
+function isAdmin(req) {
+  if (!ADMIN_PASSWORD) return false;
+  const m = /(?:^|;\s*)rm_admin=([^;]+)/.exec(req.headers.cookie || '');
+  if (!m) return false;
+  const [who, exp, sig] = decodeURIComponent(m[1]).split('.');
+  return who === 'admin' && sign(`${who}.${exp}`) === sig && Number(exp) > Date.now();
+}
+function safeEqual(a, b) {
+  const x = crypto.createHash('sha256').update(String(a)).digest();
+  const y = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(x, y);
+}
+function randomCode(n) {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  return Array.from(crypto.randomBytes(n), (b) => chars[b % chars.length]).join('');
 }
 
 // ---------------------------------------------------------------- Supabase helpers
@@ -152,6 +170,12 @@ const store = {
     if (USE_SUPA) { await sbStorage('DELETE', `object/${BUCKET}`, JSON.stringify({ prefixes: keys }), { 'Content-Type': 'application/json' }).catch(() => {}); return; }
     for (const k of keys) { try { fs.unlinkSync(path.join(LOCAL_IMG, k)); } catch {} }
   },
+  async remove(id) {
+    if (USE_SUPA) { await sb('DELETE', `workspaces?id=eq.${id}`, undefined, 'return=minimal'); return; }
+    localDb.workspaces = localDb.workspaces.filter((w) => w.id !== id);
+    localDb.clicks = localDb.clicks.filter((c) => c.workspace_id !== id);
+    localWrite();
+  },
   async addClick(row) {
     if (USE_SUPA) { await sb('POST', 'click_events', [row], 'return=minimal'); return; }
     localDb.clicks.push(row); if (localDb.clicks.length > 20000) localDb.clicks.shift(); localWrite();
@@ -164,6 +188,9 @@ const store = {
 
 // ---------------------------------------------------------------- workspaces (cache ในหน่วยความจำ)
 const WS = new Map();
+// แถวระบบ (slug "_system") เก็บค่าตั้งของ admin เช่น รหัสสร้าง workspace — ผู้ใช้สร้าง slug ขึ้นต้นด้วย _ ไม่ได้
+let SYS = null;
+function signupCode() { return (SYS && SYS.data && SYS.data.signupCode) || ''; }
 function normData(d) {
   d = d && typeof d === 'object' ? d : {};
   d.config = d.config || {};
@@ -450,7 +477,7 @@ const server = http.createServer(async (req, res) => {
     const M = req.method;
 
     // ----- public -----
-    if (M === 'GET' && (p === '/' || p === '/index.html')) return serveFile(res, path.join(__dirname, 'index.html'), 'text/html; charset=utf-8');
+    if (M === 'GET' && (p === '/' || p === '/index.html' || p === '/admin')) return serveFile(res, path.join(__dirname, 'index.html'), 'text/html; charset=utf-8');
     if (M === 'GET' && p === '/logo.png') return serveFile(res, path.join(__dirname, 'logo.png'), 'image/png', 'public, max-age=86400');
     if (M === 'GET' && (p === '/favicon.png' || p === '/favicon.ico')) return serveFile(res, path.join(__dirname, 'favicon.png'), 'image/png', 'public, max-age=86400');
     if (p === '/health' || p === '/cron') { tick().catch(() => {}); res.writeHead(200); return res.end('ok'); }
@@ -470,28 +497,85 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200); return res.end('OK');
     }
 
-    if (p === '/api/meta' && M === 'GET') return sendJson(res, 200, { signupCodeRequired: !!SIGNUP_CODE, storage: USE_SUPA ? 'supabase' : 'local' });
+    if (p === '/api/meta' && M === 'GET') return sendJson(res, 200, { signupCodeRequired: !!signupCode() });
+
+    // ----- ลืมรหัสผ่าน: ส่งคำขอให้ admin รีเซ็ต -----
+    if (p === '/api/auth/forgot' && M === 'POST') {
+      const b = await readJson(req);
+      const ws = wsBySlug(String(b.slug || '').trim().toLowerCase());
+      if (ws) {
+        ws.data.resetRequest = { at: new Date().toISOString(), contact: String(b.contact || '').slice(0, 120) };
+        await saveWs(ws);
+      }
+      // ตอบเหมือนกันเสมอ ไม่บอกว่ามี workspace นี้หรือไม่
+      return sendJson(res, 200, { ok: true });
+    }
+
+    // ----- admin -----
+    if (p === '/api/admin/login' && M === 'POST') {
+      const b = await readJson(req);
+      if (!ADMIN_PASSWORD) return sendJson(res, 403, { error: 'ยังไม่ได้ตั้ง ADMIN_PASSWORD ใน Render' });
+      if (!safeEqual(b.password || '', ADMIN_PASSWORD)) { await new Promise((r) => setTimeout(r, 800)); return sendJson(res, 401, { error: 'รหัสผู้ดูแลไม่ถูกต้อง' }); }
+      return sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, makeAdminSession(), 43200, 'rm_admin') });
+    }
+    if (p === '/api/admin/logout' && M === 'POST') return sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0, 'rm_admin') });
+    if (p.startsWith('/api/admin/')) {
+      if (!isAdmin(req)) return sendJson(res, 401, { error: 'unauthorized' });
+      if (p === '/api/admin/overview' && M === 'GET') {
+        const list = [...WS.values()].map((w) => {
+          const sets = Object.values(w.data.sets || {});
+          return {
+            id: w.id, slug: w.slug, name: w.name, createdAt: w.created_at,
+            botName: w.data.config.botName || '', botBasicId: w.data.config.botBasicId || '',
+            tokenSet: !!w.data.config.tokenEnc, secretSet: !!w.data.config.secretEnc,
+            sets: sets.length, live: sets.filter((s) => s.status === 'live').length,
+            scheduled: sets.filter((s) => s.status === 'scheduled').length,
+            resetRequest: w.data.resetRequest || null,
+          };
+        }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        return sendJson(res, 200, { ok: true, signupCode: signupCode(), workspaces: list });
+      }
+      if (p === '/api/admin/signup-code' && M === 'POST') {
+        const b = await readJson(req);
+        const code = String(b.code || '').trim();
+        if (code.length < 4) return sendJson(res, 400, { error: 'รหัสอย่างน้อย 4 ตัว' });
+        SYS.data.signupCode = code; await saveWs(SYS);
+        return sendJson(res, 200, { ok: true });
+      }
+      let am = p.match(/^\/api\/admin\/workspaces\/([^/]+)\/reset-password$/);
+      if (am && M === 'POST') {
+        const w = WS.get(am[1]); if (!w) return sendJson(res, 404, { error: 'ไม่พบ workspace' });
+        const temp = randomCode(8);
+        w.password_hash = hashPw(temp); delete w.data.resetRequest; await saveWs(w);
+        return sendJson(res, 200, { ok: true, tempPassword: temp });
+      }
+      am = p.match(/^\/api\/admin\/workspaces\/([^/]+)$/);
+      if (am && M === 'DELETE') {
+        const w = WS.get(am[1]); if (!w) return sendJson(res, 404, { error: 'ไม่พบ workspace' });
+        const keys = [];
+        for (const s of Object.values(w.data.sets || {})) for (const t of ['tab1', 'tab2']) keys.push(imgKey(w, s.id, t));
+        await store.delImgs(keys);
+        await store.remove(w.id);
+        WS.delete(w.id);
+        return sendJson(res, 200, { ok: true });
+      }
+      return sendJson(res, 404, { error: 'Not found' });
+    }
 
     if (p === '/api/auth/register' && M === 'POST') {
       const b = await readJson(req);
       const slug = String(b.slug || '').trim().toLowerCase();
       const name = String(b.name || '').trim().slice(0, 60);
       const pw = String(b.password || '');
-      if (SIGNUP_CODE && String(b.signupCode || '').trim() !== SIGNUP_CODE) return sendJson(res, 403, { error: 'รหัสสร้าง workspace ไม่ถูกต้อง (ขอจากผู้ดูแลระบบ)' });
+      if (!SYS) return sendJson(res, 503, { error: 'ระบบยังเชื่อมฐานข้อมูลไม่สำเร็จ ลองใหม่ภายหลัง' });
+      if (signupCode() && String(b.signupCode || '').trim() !== signupCode()) return sendJson(res, 403, { error: 'รหัสสร้าง workspace ไม่ถูกต้อง (ขอจากผู้ดูแลระบบ)' });
       if (!/^[a-z0-9][a-z0-9-]{2,30}$/.test(slug)) return sendJson(res, 400, { error: 'Workspace ID ใช้ได้เฉพาะ a-z, 0-9, ขีด (-) ยาว 3–31 ตัว' });
       if (!name) return sendJson(res, 400, { error: 'กรุณาใส่ชื่อทีม/แบรนด์' });
       if (pw.length < 6) return sendJson(res, 400, { error: 'รหัสผ่านอย่างน้อย 6 ตัว' });
       if (wsBySlug(slug)) return sendJson(res, 409, { error: 'Workspace ID นี้มีคนใช้แล้ว' });
-      const data = normData({});
-      // workspace แรกของระบบ: ดึง token เดิมจาก env มาใช้ให้อัตโนมัติ
-      if (WS.size === 0 && process.env.CHANNEL_ACCESS_TOKEN) {
-        data.config.tokenEnc = enc(process.env.CHANNEL_ACCESS_TOKEN);
-        if (process.env.CHANNEL_SECRET) data.config.secretEnc = enc(process.env.CHANNEL_SECRET);
-      }
-      const saved = await store.insert({ slug, name, password_hash: hashPw(pw), bot_user_id: null, data });
+      const saved = await store.insert({ slug, name, password_hash: hashPw(pw), bot_user_id: null, data: normData({}) });
       saved.data = normData(saved.data);
       WS.set(saved.id, saved);
-      if (tokenOf(saved)) refreshBotInfo(saved).catch(() => {});
       return sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, makeSession(saved.id), 2592000) });
     }
 
@@ -502,6 +586,7 @@ const server = http.createServer(async (req, res) => {
         await new Promise((r) => setTimeout(r, 600));
         return sendJson(res, 401, { error: 'Workspace ID หรือรหัสผ่านไม่ถูกต้อง' });
       }
+      if (ws.data.resetRequest) { delete ws.data.resetRequest; saveWs(ws).catch(() => {}); }
       return sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, makeSession(ws.id), 2592000) });
     }
 
@@ -683,7 +768,15 @@ const server = http.createServer(async (req, res) => {
   try {
     if (USE_SUPA) await ensureBucket();
     const rows = await store.loadAll();
-    for (const r of rows) { r.data = normData(r.data); WS.set(r.id, r); }
+    for (const r of rows) {
+      if (r.slug === '_system') { SYS = r; SYS.data = SYS.data || {}; continue; }
+      r.data = normData(r.data); WS.set(r.id, r);
+    }
+    if (!SYS) {
+      // ครั้งแรก: สร้างแถวระบบ + รหัสสร้าง workspace แบบสุ่ม (admin เปลี่ยนได้ที่ /admin)
+      SYS = await store.insert({ slug: '_system', name: 'system', password_hash: '-', bot_user_id: null, data: { signupCode: (process.env.SIGNUP_CODE || '').trim() || `RM-${randomCode(6)}` } });
+      SYS.data = SYS.data || {};
+    }
     console.log(`โหลด ${WS.size} workspace (storage: ${USE_SUPA ? 'Supabase' : 'local'})`);
   } catch (e) {
     console.error('❌ โหลดข้อมูลไม่สำเร็จ:', e.message);
