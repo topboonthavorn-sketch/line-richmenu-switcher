@@ -506,6 +506,15 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/meta' && M === 'GET') return sendJson(res, 200, { signupCodeRequired: !!signupCode() });
 
+    // ----- จำนวนผู้ใช้ (workspace) ให้ Digital Business App Store ดึงไปแสดง -----
+    // ใช้: GET /api/public/stats?key=<STATS_KEY>  → {"users": จำนวน workspace, "connected": จำนวนที่เชื่อม LINE แล้ว}
+    if (p === '/api/public/stats' && M === 'GET') {
+      const statsKey = (process.env.STATS_KEY || process.env.stats_key || '').trim();
+      if (!statsKey || !safeEqual(url.searchParams.get('key') || '', statsKey)) return sendJson(res, 403, { error: 'forbidden' });
+      const list = [...WS.values()];
+      return sendJson(res, 200, { users: list.length, connected: list.filter((w) => !!w.data.config.tokenEnc).length });
+    }
+
     // ----- ลืมรหัสผ่าน: ส่งคำขอให้ admin รีเซ็ต -----
     if (p === '/api/auth/forgot' && M === 'POST') {
       const b = await readJson(req);
