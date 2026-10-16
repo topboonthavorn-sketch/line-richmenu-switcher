@@ -618,6 +618,11 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/config' && M === 'POST') {
       const b = await readJson(req);
+      if (b.disconnect) {
+        delete D.config.tokenEnc; delete D.config.secretEnc; delete D.config.botName; delete D.config.botBasicId;
+        ws.bot_user_id = null; await saveWs(ws);
+        return sendJson(res, 200, { ok: true });
+      }
       if (b.name) ws.name = String(b.name).slice(0, 60);
       if (b.channelAccessToken) D.config.tokenEnc = enc(String(b.channelAccessToken).trim());
       if (b.channelSecret) D.config.secretEnc = enc(String(b.channelSecret).trim());
