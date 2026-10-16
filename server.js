@@ -506,15 +506,6 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/meta' && M === 'GET') return sendJson(res, 200, { signupCodeRequired: !!signupCode() });
 
-    // ----- จำนวนผู้ใช้ (workspace) ให้ Digital Business App Store ดึงไปแสดง -----
-    // ใช้: GET /api/public/stats?key=<STATS_KEY>  → {"users": จำนวน workspace, "connected": จำนวนที่เชื่อม LINE แล้ว}
-    if (p === '/api/public/stats' && M === 'GET') {
-      const statsKey = (process.env.STATS_KEY || process.env.stats_key || '').trim();
-      if (!statsKey || !safeEqual(url.searchParams.get('key') || '', statsKey)) return sendJson(res, 403, { error: 'forbidden' });
-      const list = [...WS.values()];
-      return sendJson(res, 200, { users: list.length, connected: list.filter((w) => !!w.data.config.tokenEnc).length });
-    }
-
     // ----- ลืมรหัสผ่าน: ส่งคำขอให้ admin รีเซ็ต -----
     if (p === '/api/auth/forgot' && M === 'POST') {
       const b = await readJson(req);
@@ -615,7 +606,14 @@ const server = http.createServer(async (req, res) => {
     const D = ws.data;
 
     if (p === '/api/me' && M === 'GET') return sendJson(res, 200, { ok: true, workspace: { id: ws.id, slug: ws.slug, name: ws.name } });
-    if (p === '/api/state' && M === 'GET') return sendJson(res, 200, publicState(ws));
+    if (p === '/api/state' && M === 'GET') {
+      // ดึงชื่อ/ID ของ OA ใหม่จาก LINE ทุก 5 นาที (กรณีเปลี่ยนชื่อ OA ภายหลัง)
+      if (tokenOf(ws) && Date.now() - (D.config.botCheckedAt || 0) > 5 * 60e3) {
+        D.config.botCheckedAt = Date.now();
+        await Promise.race([refreshBotInfo(ws).catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
+      }
+      return sendJson(res, 200, publicState(ws));
+    }
 
     if (p === '/api/auth/password' && M === 'POST') {
       const b = await readJson(req);
