@@ -202,7 +202,14 @@ function normData(d) {
 function wsBySlug(slug) { for (const w of WS.values()) if (w.slug === slug) return w; return null; }
 function tokenOf(ws) { return dec(ws.data.config.tokenEnc); }
 function secretOf(ws) { return dec(ws.data.config.secretEnc); }
-function saveWs(ws) { return store.save(ws); }
+// บันทึกทีละคำขอตามลำดับ (กันคำขอเก่าไปถึง Supabase ทีหลังแล้วเขียนทับข้อมูลใหม่)
+const saveChains = new Map();
+function saveWs(ws) {
+  const prev = saveChains.get(ws.id) || Promise.resolve();
+  const next = prev.catch(() => {}).then(() => store.save(ws));
+  saveChains.set(ws.id, next);
+  return next;
+}
 function imgKey(ws, setId, tab) { return `${ws.id}/${setId}/${tab}.jpg`; }
 
 // ---------------------------------------------------------------- sets

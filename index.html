@@ -313,7 +313,7 @@
           <div class="field" id="valWrap">
             <label id="valLabel">ค่า</label>
             <select id="aSwitch" onchange="valChange()"><option value="tab1">ไปแถบ 1</option><option value="tab2">ไปแถบ 2</option></select>
-            <input id="aVal" class="hide" onchange="valChange()" placeholder="https://...">
+            <input id="aVal" class="hide" oninput="valInput()" onchange="valChange()" placeholder="https://...">
           </div>
           <button class="btn-danger btn btn-sm" id="delBtn" onclick="delArea()">ลบปุ่มนี้</button>
         </div>
@@ -465,7 +465,8 @@ async function refresh(){
   S=await api('/api/state');
   document.getElementById('wsName').textContent='👥 '+(S.workspace.name||S.workspace.slug);
   document.getElementById('botBadge').className='pill '+(S.config.tokenSet?'ok':'warn');
-  document.getElementById('botBadge').textContent=S.config.tokenSet?('LINE: '+(S.config.botName||'เชื่อมต่อแล้ว')):'ยังไม่เชื่อม LINE';
+  document.getElementById('botBadge').textContent=S.config.tokenSet?('🟢 เชื่อมกับ LINE OA: '+(S.config.botName||'เชื่อมต่อแล้ว')+(S.config.botBasicId?' ('+S.config.botBasicId+')':'')):'⚪ ยังไม่เชื่อม LINE OA';
+  document.getElementById('botBadge').title='ชื่อ LINE OA ที่ token ในหน้า "ตั้งค่าระบบ" ผูกอยู่ — rich menu จะถูก deploy ไปที่ OA นี้';
   if(view==='list')renderList();
 }
 
@@ -566,7 +567,7 @@ async function openDetail(id){
   }
   selTab('tab1');updateStatusUI();
 }
-function goList(){if(!S)return;view='list';document.getElementById('view-detail').classList.add('hide');document.getElementById('view-list').classList.remove('hide');refresh();}
+async function goList(){if(!S)return;const ae=document.activeElement;if(ae&&ae.blur)ae.blur();await flushSave();view='list';document.getElementById('view-detail').classList.add('hide');document.getElementById('view-list').classList.remove('hide');refresh();}
 function curSet(){return S.sets[setId];}
 function curTab(){return curSet().tabs[tab];}
 function isCustom(){return curTab().template==='custom';}
@@ -612,7 +613,10 @@ function draw(){
 function cpos(e){const r=cv.getBoundingClientRect();return{x:Math.max(0,Math.min(W,(e.clientX-r.left)/r.width*W)),y:Math.max(0,Math.min(H,(e.clientY-r.top)/r.height*H))};}
 function hitCorner(a,p){const tol=60,c={nw:[a.x,a.y],ne:[a.x+a.w,a.y],sw:[a.x,a.y+a.h],se:[a.x+a.w,a.y+a.h]};for(const k in c)if(Math.abs(p.x-c[k][0])<tol&&Math.abs(p.y-c[k][1])<tol)return k;return null;}
 function hitArea(ar,p){for(let i=ar.length-1;i>=0;i--){const a=ar[i];if(p.x>=a.x&&p.x<=a.x+a.w&&p.y>=a.y&&p.y<=a.y+a.h)return i;}return -1;}
-cv.addEventListener('mousedown',e=>{const p=cpos(e),t=curTab(),cu=isCustom();
+cv.addEventListener('mousedown',e=>{
+  // ช่องที่กำลังพิมพ์ค้างอยู่ → บันทึกค่าก่อนเปลี่ยนไปเลือกปุ่มอื่น
+  const ae=document.activeElement;if(ae&&['aVal','aX','aY','aW','aH'].includes(ae.id))ae.blur();
+  const p=cpos(e),t=curTab(),cu=isCustom();
   if(cu&&sel>=0&&t.areas[sel]){const cn=hitCorner(t.areas[sel],p);if(cn){drag={mode:'resize',corner:cn,idx:sel,orig:{...t.areas[sel]}};return;}}
   const h=hitArea(t.areas,p);
   if(h>=0){selArea(h);if(cu)drag={mode:'move',idx:h,sp:p,orig:{...t.areas[h]}};return;}
@@ -650,6 +654,8 @@ function renderSide(){
 function syncVal(a){const t=a.action.type;document.getElementById('aSwitch').classList.toggle('hide',t!=='switch');const v=document.getElementById('aVal');v.classList.toggle('hide',!(t==='uri'||t==='message'));const lb=document.getElementById('valLabel');lb.classList.toggle('hide',t==='none');lb.textContent=t==='switch'?'สลับไปที่':t==='uri'?'ลิงก์ URL (ขึ้นต้น https://)':'ข้อความที่จะส่ง';if(t==='switch')document.getElementById('aSwitch').value=a.action.value==='tab2'?'tab2':'tab1';else if(t!=='none'){v.value=a.action.value||'';v.placeholder=t==='uri'?'https://www.example.com':'เช่น สวัสดีครับ';}}
 function coordChange(){if(!isCustom())return;const a=curTab().areas[sel];if(!a)return;a.x=Math.max(0,Math.min(W-MIN,+aX.value||0));a.y=Math.max(0,Math.min(H-MIN,+aY.value||0));a.w=Math.max(MIN,Math.min(W-a.x,+aW.value||MIN));a.h=Math.max(MIN,Math.min(H-a.y,+aH.value||MIN));coordsOnly(a);saveTab();draw();}
 function actionTypeChange(){const a=curTab().areas[sel];if(!a)return;a.action.type=aType.value;a.action.value=aType.value==='switch'?(tab==='tab1'?'tab2':'tab1'):'';syncVal(a);saveTab();draw();renderSide();}
+// บันทึกทุกตัวอักษรที่พิมพ์ (กันค่าหายเมื่อคลิกปุ่มอื่นบนรูปทันทีโดยไม่ได้ออกจากช่อง)
+function valInput(){const a=curTab().areas[sel];if(!a||a.action.type==='switch'||a.action.type==='none')return;a.action.value=document.getElementById('aVal').value;saveTab();}
 function valChange(){const a=curTab().areas[sel];if(!a)return;if(a.action.type==='switch')a.action.value=document.getElementById('aSwitch').value;else if(a.action.type!=='none')a.action.value=document.getElementById('aVal').value.trim();saveTab();renderSide();draw();}
 function delArea(){if(!isCustom())return;curTab().areas.splice(sel,1);sel=-1;saveTab();renderAll();}
 
