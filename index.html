@@ -475,9 +475,6 @@ function toast(m){const t=document.getElementById('toast');t.textContent=m;t.cla
 async function refresh(){
   S=await api('/api/state');
   document.getElementById('wsName').textContent='👥 '+(S.workspace.name||S.workspace.slug);
-  document.getElementById('botBadge').className='pill '+(S.config.tokenSet?'ok':'warn');
-  document.getElementById('botBadge').textContent=S.config.tokenSet?('🟢 เชื่อมกับ LINE OA: '+(S.config.botName||'เชื่อมต่อแล้ว')+(S.config.botBasicId?' ('+S.config.botBasicId+')':'')):'⚪ ยังไม่เชื่อม LINE OA';
-  document.getElementById('botBadge').title='ชื่อ LINE OA ที่ token ในหน้า "ตั้งค่าระบบ" ผูกอยู่ — rich menu จะถูก deploy ไปที่ OA นี้';
   document.getElementById('onboard').classList.toggle('hide',!!S.config.tokenSet);
   if(view==='list')renderList();
 }
